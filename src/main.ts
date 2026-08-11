@@ -254,7 +254,7 @@ function setGreeting() {
 async function loadEvents() {
   $('accueil-list').innerHTML = '<div class="load-state">Chargement des sorties…</div>';
   try {
-    const res = await fetch('/data/events.json', { cache: 'no-store' });
+    const res = await fetch(`${import.meta.env.BASE_URL}data/events.json`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const file = (await res.json()) as EventsFile;
     state.events = file.events;

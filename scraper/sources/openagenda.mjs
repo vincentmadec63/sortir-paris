@@ -13,8 +13,8 @@ const OUT_FILE = path.join(__dirname, '..', '..', 'public', 'data', 'events.json
 
 const API_BASE = 'https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/records';
 const PAGE_SIZE = 100;
-const MAX_PAGES = 15;
-const TARGET_MATCHES = 250;
+const MAX_PAGES = 50;
+const TARGET_MATCHES = 600;
 
 function buildWhereClause() {
   const inList = ALL_DEPARTMENTS.map((d) => JSON.stringify(d)).join(',');
