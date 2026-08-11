@@ -1,0 +1,20 @@
+{
+  "name": "sortir-paris",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "fetch:openagenda": "node scraper/sources/openagenda.mjs",
+    "refresh-data": "npm run fetch:openagenda",
+    "gen:icons": "node scripts/generate-icons.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.20.5",
+    "sharp": "^0.33.5"
+  }
+}

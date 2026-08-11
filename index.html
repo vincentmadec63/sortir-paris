@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#15121C" />
+  <meta name="description" content="Théâtre, stand-up, concerts, concepts éphémères et événements à Paris et en grande couronne, mis à jour deux fois par jour." />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <title>Sortir Paris</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <span class="topbar-title">Sortir Paris</span>
+      <span class="topbar-zone">Paris · Île-de-France</span>
+    </header>
+
+    <div class="screens">
+      <!-- ACCUEIL -->
+      <div class="screen" id="screen-accueil">
+        <div class="screen-title" id="greeting">Bonjour.</div>
+        <p class="screen-sub">Voici ce qu'il ne faut pas rater cette semaine.</p>
+
+        <div class="section-label">NOUVEAU CETTE SEMAINE</div>
+        <div class="hero-rail" id="hero-rail"></div>
+
+        <div class="section-label">À L'AFFICHE PRÈS DE VOUS</div>
+        <div id="accueil-list"></div>
+      </div>
+
+      <!-- EXPLORER -->
+      <div class="screen" id="screen-explorer" hidden>
+        <div class="screen-title">Explorer</div>
+        <div class="search-row">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="search-input" placeholder="Un spectacle, une salle, un quartier…" />
+        </div>
+        <div class="chip-row" id="chip-row"></div>
+        <button class="filter-btn" id="open-filters">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          Filtres
+          <span class="filter-count" id="filter-count">0</span>
+        </button>
+        <div id="explorer-list"></div>
+        <div class="empty-state" id="explorer-empty" hidden>Aucun résultat pour cette combinaison de filtres.<br/>Essayez d'élargir la zone ou le budget.</div>
+      </div>
+
+      <!-- CARTE -->
+      <div class="screen" id="screen-carte" hidden>
+        <div class="screen-title">Carte</div>
+        <p class="screen-sub">Paris intra-muros, petite et grande couronne.</p>
+        <div class="map-wrap">
+          <div class="zone-legend">
+            <span><i style="background:var(--amber)"></i>Paris</span>
+            <span><i style="background:var(--brick)"></i>Petite couronne</span>
+            <span><i style="background:var(--ink-faint)"></i>Grande couronne</span>
+          </div>
+          <svg viewBox="0 0 340 340" width="100%" style="display:block">
+            <circle cx="170" cy="170" r="150" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+            <circle cx="170" cy="170" r="95" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
+            <circle cx="170" cy="170" r="46" fill="color-mix(in srgb, var(--amber) 10%, transparent)" stroke="var(--amber)" stroke-width="1.2"/>
+            <g id="map-pins"></g>
+          </svg>
+        </div>
+        <div class="section-label">DANS CETTE ZONE</div>
+        <div id="carte-list"></div>
+      </div>
+
+      <!-- EPHEMERE -->
+      <div class="screen" id="screen-ephemere" hidden>
+        <div class="screen-title">Concepts éphémères</div>
+        <p class="screen-sub">Vérifiés par recoupement de sources avant publication.</p>
+        <div id="ephemere-list"></div>
+        <div class="empty-state" id="ephemere-empty" hidden>Aucun concept éphémère détecté pour l'instant.</div>
+      </div>
+
+      <!-- FAVORIS -->
+      <div class="screen" id="screen-favoris" hidden>
+        <div class="screen-title">Favoris</div>
+        <p class="screen-sub">Enregistrés sur cet appareil — sans compte.</p>
+        <div id="favoris-list"></div>
+        <div class="empty-state" id="favoris-empty">Touchez le cœur sur une sortie pour la retrouver ici.</div>
+      </div>
+    </div>
+
+    <div class="sheet-backdrop" id="backdrop"></div>
+
+    <!-- DETAIL SHEET -->
+    <div class="sheet" id="detail-sheet">
+      <div class="sheet-grip"></div>
+      <button class="sheet-close" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="sheet-scroll" id="detail-content"></div>
+    </div>
+
+    <!-- FILTER SHEET -->
+    <div class="sheet" id="filter-sheet">
+      <div class="sheet-grip"></div>
+      <button class="sheet-close" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="sheet-scroll">
+        <h3 class="sheet-heading">Affiner la recherche</h3>
+        <div class="filter-group">
+          <h4>Budget</h4>
+          <div class="filter-options" data-group="price">
+            <div class="filter-opt" data-val="free">Gratuit</div>
+            <div class="filter-opt" data-val="low">Moins de 20€</div>
+            <div class="filter-opt" data-val="mid">20–40€</div>
+            <div class="filter-opt" data-val="high">Plus de 40€</div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <h4>Zone</h4>
+          <div class="filter-options" data-group="zone">
+            <div class="filter-opt" data-val="paris">Paris intra-muros</div>
+            <div class="filter-opt" data-val="petite_couronne">Petite couronne</div>
+            <div class="filter-opt" data-val="grande_couronne">Grande couronne</div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <h4>Note minimum</h4>
+          <div class="filter-options" data-group="rating">
+            <div class="filter-opt" data-val="4.5">4.5 et +</div>
+            <div class="filter-opt" data-val="4">4.0 et +</div>
+          </div>
+        </div>
+        <button class="filter-apply" id="apply-filters">Voir les résultats</button>
+      </div>
+    </div>
+
+    <nav class="tabbar">
+      <button class="tab-btn active" data-tab="accueil">
+        <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
+        Accueil
+      </button>
+      <button class="tab-btn" data-tab="explorer">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Explorer
+      </button>
+      <button class="tab-btn" data-tab="carte">
+        <svg viewBox="0 0 24 24"><path d="M9 3v15M15 6v15M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/></svg>
+        Carte
+      </button>
+      <button class="tab-btn" data-tab="ephemere">
+        <svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
+        Éphémère
+      </button>
+      <button class="tab-btn" data-tab="favoris">
+        <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>
+        Favoris
+      </button>
+    </nav>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
