@@ -9,35 +9,44 @@ billetterie du partenaire (pas d'achat ni de compte dans l'app).
 
 ```bash
 npm install
-npm run dev              # prévisualiser l'app sur http://localhost:5173
-npm run fetch:openagenda  # relancer le connecteur de données (écrit public/data/events.json)
-npm run build             # build de production dans dist/
+npm run dev            # prévisualiser l'app sur http://localhost:5173
+npm run refresh-data   # relance les 3 connecteurs + fusion (écrit public/data/events.json)
+npm run build           # build de production dans dist/
 ```
 
 ## D'où viennent les données
 
-Pour ce premier MVP, une seule source : le [mirroir public OpenAgenda
-hébergé par Opendatasoft](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/),
-en accès anonyme (aucune clé API, aucun compte). Le connecteur
-(`scraper/sources/openagenda.mjs`) :
+Trois sources, fusionnées par `scraper/merge.mjs` :
 
-1. interroge les événements à venir dans les 8 départements Paris + petite
-   + grande couronne,
-2. classe chaque événement dans une catégorie (théâtre / stand-up / concert /
-   concept éphémère / événement) par mots-clés, en excluant le bruit évident
-   (offres d'emploi, formations, réunions administratives...),
-3. écrit `public/data/events.json`, consommé directement par la PWA.
+- **[OpenAgenda](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/)**
+  (mirroir public Opendatasoft, accès anonyme) — uniquement pour les
+  catégories "concept éphémère" et "événement", qu'il couvre mieux qu'une
+  billetterie. Classement par mots-clés.
+- **[Billetreduc](https://www.billetreduc.com)** — théâtre, stand-up, concerts
+  à Paris. Catégorisation directe via les pages `/theatre`, `/humour`,
+  `/comedy-clubs`, `/concerts` du site (pas de devinette par mots-clés), prix
+  et avis (échelle /10 convertie sur 5) lus dans le JSON-LD des fiches.
+- **[TheaterOnline](https://www.theatreonline.com)** — théâtre, stand-up,
+  concerts à Paris, en complément de Billetreduc (parfois d'autres salles,
+  d'autres avis). Genres `comedie-boulevard`, `contemporain`, `classique`,
+  `musique-danse`, `humour-cafe-theatre`. Données lues dans les microdonnées
+  schema.org du HTML (le site n'expose pas de JSON-LD).
+
+Règles communes appliquées par tous les connecteurs : **pas de photo → pas de
+fiche**, et la catégorie **stand-up est filtrée à Paris intra-muros**
+uniquement (pas de couronne).
 
 **Limites connues à ce stade** (à améliorer dans les prochaines sessions) :
-- La classification par mots-clés n'est pas parfaite (ex : un film peut être
-  mal classé "théâtre" s'il contient le mot "comédie").
-- Les concepts éphémères sont rares dans ce jeu de données — il faudra une
-  source dédiée (ex : agendas municipaux, Instagram de lieux) pour vraiment
-  bien couvrir cette catégorie.
-- Pas de note/avis pour l'instant (OpenAgenda n'en fournit pas) — prévu en
-  phase 2 avec une source d'avis dédiée.
-- Le prix est extrait d'un champ texte libre quand c'est possible ; sinon
-  affiché "Tarif à vérifier".
+- Billetreduc et TheaterOnline peuvent lister le même spectacle séparément
+  (deux fiches, deux billetteries) — pas de déduplication inter-sources pour
+  l'instant.
+- La classification par mots-clés d'OpenAgenda n'est pas parfaite (ex : un
+  film peut être mal classé si sa description contient un mot ambigu).
+- Le prix est parfois absent selon la source ; affiché "Tarif à vérifier"
+  dans ce cas.
+- Le scraping Billetreduc/TheaterOnline respecte les robots.txt et reste
+  volontairement limité en nombre de pages par catégorie (usage personnel,
+  pas de charge excessive sur leurs serveurs).
 
 ## Mettre en ligne (gratuit, via GitHub)
 

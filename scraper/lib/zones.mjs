@@ -16,3 +16,19 @@ for (const [zone, departments] of Object.entries(DEPARTMENTS_BY_ZONE)) {
 export function zoneForDepartment(department) {
   return DEPARTMENT_TO_ZONE.get(department) ?? null;
 }
+
+const POSTAL_PREFIX_TO_ZONE = {
+  75: 'paris',
+  92: 'petite_couronne',
+  93: 'petite_couronne',
+  94: 'petite_couronne',
+  77: 'grande_couronne',
+  78: 'grande_couronne',
+  91: 'grande_couronne',
+  95: 'grande_couronne',
+};
+
+export function zoneForPostalCode(postalCode) {
+  const prefix = (postalCode ?? '').trim().slice(0, 2);
+  return POSTAL_PREFIX_TO_ZONE[prefix] ?? null;
+}

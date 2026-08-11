@@ -8,13 +8,17 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "fetch:openagenda": "node scraper/sources/openagenda.mjs",
-    "refresh-data": "npm run fetch:openagenda",
+    "fetch:billetreduc": "node scraper/sources/billetreduc.mjs",
+    "fetch:theatreonline": "node scraper/sources/theatreonline.mjs",
+    "merge:data": "node scraper/merge.mjs",
+    "refresh-data": "npm run fetch:openagenda && npm run fetch:billetreduc && npm run fetch:theatreonline && npm run merge:data",
     "gen:icons": "node scripts/generate-icons.mjs"
   },
   "devDependencies": {
+    "cheerio": "^1.2.0",
+    "sharp": "^0.33.5",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
-    "vite-plugin-pwa": "^0.20.5",
-    "sharp": "^0.33.5"
+    "vite-plugin-pwa": "^0.20.5"
   }
 }

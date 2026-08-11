@@ -1,7 +1,7 @@
 // Source : mirroir public (ODbL) des événements OpenAgenda hébergé par
 // Opendatasoft. Accès anonyme, sans clé API ni compte à créer.
 // https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ALL_DEPARTMENTS, zoneForDepartment } from '../lib/zones.mjs';
@@ -9,7 +9,7 @@ import { classify, isExcluded } from '../lib/classify.mjs';
 import { parsePrice } from '../lib/price.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUT_FILE = path.join(__dirname, '..', '..', 'public', 'data', 'events.json');
+const OUT_FILE = path.join(__dirname, '..', '.cache', 'openagenda.json');
 
 const API_BASE = 'https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/records';
 const PAGE_SIZE = 100;
@@ -45,8 +45,10 @@ function toEventItem(record) {
   const category = classify(searchableText);
   if (!category) return null;
 
-  // Le stand-up est explicitement demandé "à Paris" uniquement (pas la couronne).
-  if (category === 'standup' && zone !== 'paris') return null;
+  // Théâtre / stand-up / concert viennent désormais de Billetreduc (billetterie
+  // dédiée, meilleures données). OpenAgenda ne sert plus que pour les concepts
+  // éphémères et les événements génériques, qu'il couvre mieux.
+  if (category === 'theatre' || category === 'standup' || category === 'concert') return null;
 
   // Une vignette sans photo n'a pas d'intérêt : on écarte l'événement plutôt
   // que d'afficher un visuel générique.
@@ -77,16 +79,6 @@ function toEventItem(record) {
   };
 }
 
-async function loadPreviousIds() {
-  try {
-    const raw = await readFile(OUT_FILE, 'utf-8');
-    const prev = JSON.parse(raw);
-    return new Set((prev.events ?? []).map((e) => e.id));
-  } catch {
-    return new Set();
-  }
-}
-
 async function main() {
   const byId = new Map();
   let offset = 0;
@@ -104,16 +96,10 @@ async function main() {
     page += 1;
   }
 
-  const previousIds = await loadPreviousIds();
-  const events = [...byId.values()]
-    .map((e) => ({ ...e, isNew: !previousIds.has(e.id) }))
-    .sort((a, b) => a.dateStart.localeCompare(b.dateStart));
+  const events = [...byId.values()].sort((a, b) => a.dateStart.localeCompare(b.dateStart));
 
   await mkdir(path.dirname(OUT_FILE), { recursive: true });
-  await writeFile(
-    OUT_FILE,
-    JSON.stringify({ generatedAt: new Date().toISOString(), sources: ['OpenAgenda'], events }, null, 2)
-  );
+  await writeFile(OUT_FILE, JSON.stringify({ source: 'OpenAgenda', events }, null, 2));
 
   const counts = events.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] ?? 0) + 1;
