@@ -5,15 +5,6 @@ import { CATEGORY_LABELS } from './types';
 
 registerSW({ immediate: true });
 
-const GRAD = [
-  'linear-gradient(135deg,#3A2E4A,#6B4A3A)',
-  'linear-gradient(135deg,#2E3A4A,#4A3A6B)',
-  'linear-gradient(135deg,#4A2E3A,#8C5C22)',
-  'linear-gradient(135deg,#2E4A3E,#3A2E4A)',
-  'linear-gradient(135deg,#4A3A2E,#6B2E3A)',
-  'linear-gradient(135deg,#2E3A2E,#4A6B3A)',
-];
-
 const CATS: { v: Category | 'all'; l: string }[] = [
   { v: 'all', l: 'Tout' },
   { v: 'theatre', l: 'Théâtre' },
@@ -58,13 +49,10 @@ function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...state.favorites]));
 }
 
-function hashIndex(id: string): number {
+function hashIndex(id: string, mod: number): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h % GRAD.length;
-}
-function grad(id: string): string {
-  return GRAD[hashIndex(id)];
+  return h % mod;
 }
 
 function starsSvg(): string {
@@ -90,7 +78,8 @@ function ratingHTML(e: EventItem): string {
 }
 
 function heroCardHTML(e: EventItem): string {
-  return `<div class="hero-card" style="background:${grad(e.id)}" data-open="${e.id}">
+  return `<div class="hero-card" data-open="${e.id}">
+    <img class="hc-bg" src="${e.imageUrl}" alt="" loading="lazy" />
     ${e.isNew ? '<div class="badge-new">NOUVEAU</div>' : ''}
     <div class="hc-txt">
       <div class="hc-cat">${CATEGORY_LABELS[e.category]}</div>
@@ -102,7 +91,7 @@ function heroCardHTML(e: EventItem): string {
 function cardHTML(e: EventItem): string {
   return `<div class="card" data-open="${e.id}">
     ${heart(e.id, state.favorites.has(e.id))}
-    <div class="card-thumb" style="background:${grad(e.id)}"></div>
+    <img class="card-thumb" src="${e.imageUrl}" alt="${escapeHTML(e.title)}" loading="lazy" />
     <div class="card-body">
       <div class="card-top">
         <div>
@@ -184,7 +173,7 @@ function renderPins() {
     .map((e, i) => {
       const base = e.zone === 'paris' ? 46 : e.zone === 'petite_couronne' ? 95 : 130;
       const r = base + (i % 3) * 12;
-      const a = (hashIndex(e.id) * 13 + i * 47) % 360;
+      const a = (hashIndex(e.id, 360) * 13 + i * 47) % 360;
       const x = 170 + r * Math.cos((a * Math.PI) / 180);
       const y = 170 + r * Math.sin((a * Math.PI) / 180);
       const c = e.zone === 'paris' ? 'var(--amber)' : e.zone === 'petite_couronne' ? 'var(--brick)' : 'var(--ink-faint)';
@@ -215,7 +204,7 @@ function openDetail(id: string) {
   const e = state.events.find((x) => x.id === id);
   if (!e) return;
   $('detail-content').innerHTML = `
-    <div class="detail-hero" style="background:${grad(e.id)}"></div>
+    <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" />
     <div class="detail-cat">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
     <div class="detail-title">${escapeHTML(e.title)}</div>
     <div class="detail-meta-row">

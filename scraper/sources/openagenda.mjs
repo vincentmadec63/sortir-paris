@@ -45,6 +45,14 @@ function toEventItem(record) {
   const category = classify(searchableText);
   if (!category) return null;
 
+  // Le stand-up est explicitement demandé "à Paris" uniquement (pas la couronne).
+  if (category === 'standup' && zone !== 'paris') return null;
+
+  // Une vignette sans photo n'a pas d'intérêt : on écarte l'événement plutôt
+  // que d'afficher un visuel générique.
+  const imageUrl = record.image || record.thumbnail || null;
+  if (!imageUrl) return null;
+
   const { price, priceLabel } = parsePrice(record.conditions_fr);
 
   return {
@@ -59,6 +67,7 @@ function toEventItem(record) {
     dateStart: record.firstdate_begin,
     dateEnd: record.lastdate_end ?? record.firstdate_end ?? undefined,
     description: record.description_fr ? record.description_fr.slice(0, 400) : undefined,
+    imageUrl,
     sourceUrl: record.canonicalurl || record.location_website || 'https://openagenda.com',
     sourceName: 'OpenAgenda',
     fetchedAt: new Date().toISOString(),

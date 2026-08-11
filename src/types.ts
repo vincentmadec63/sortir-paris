@@ -16,7 +16,7 @@ export interface EventItem {
   reviewsCount?: number;
   reviewsSource?: string;
   description?: string;
-  imageHint?: string;
+  imageUrl: string;
   sourceUrl: string;
   sourceName: string;
   fetchedAt: string;
