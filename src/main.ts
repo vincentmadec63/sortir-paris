@@ -22,6 +22,39 @@ registerSW({ immediate: true });
 
 const WELCOME_SEEN_KEY = 'sortir-paris:welcome-seen';
 
+// URL par événement (partage + pages statiques générées par
+// scripts/generate-event-pages.mjs) : /spectacle/<slug>/, où slug est l'id
+// avec son premier ":" remplacé par un "-" (ex. "theatreonline:52725" ->
+// "theatreonline-52725"), réversible car les préfixes de source ne
+// contiennent jamais de tiret.
+// Sur la page racine, document.baseURI donne le bon chemin. Mais sur une
+// page statique générée (dist/spectacle/<slug>/), le document est servi 2
+// niveaux plus bas — scripts/generate-event-pages.mjs y injecte donc
+// window.__APP_BASE__ avec le vrai chemin racine du site, prioritaire ici.
+// Calculé UNE SEULE FOIS au chargement : document.baseURI suit ensuite les
+// pushState du routing client, donc le recalculer après coup renverrait le
+// chemin de la fiche affichée au lieu de la vraie racine du site.
+const APP_BASE_PATH: string = (() => {
+  const injected = (window as unknown as { __APP_BASE__?: string }).__APP_BASE__;
+  if (typeof injected === 'string') return injected;
+  return new URL('.', document.baseURI).pathname;
+})();
+function computeBasePath(): string {
+  return APP_BASE_PATH;
+}
+function slugFromId(id: string): string {
+  return id.replace(':', '-');
+}
+function idFromSlug(slug: string): string {
+  return slug.replace('-', ':');
+}
+function eventPath(id: string): string {
+  return `${computeBasePath()}spectacle/${slugFromId(id)}/`;
+}
+function eventUrl(id: string): string {
+  return `${window.location.origin}${eventPath(id)}`;
+}
+
 let currentSession: Session | null = null;
 let currentPrefs: Preferences = EMPTY_PREFS;
 
@@ -361,10 +394,16 @@ function renderFavoris() {
   $('favoris-empty').hidden = list.length > 0;
 }
 
-function openDetail(id: string) {
+let currentDetailId: string | null = null;
+
+function openDetail(id: string, opts: { updateUrl?: boolean } = {}) {
   const e = state.events.find((x) => x.id === id);
   if (!e) return;
   recordAffinity(e, 1);
+  currentDetailId = id;
+  if (opts.updateUrl !== false) {
+    history.pushState({ eventId: id }, '', eventPath(id));
+  }
   $('detail-content').innerHTML = `
     <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" decoding="async" />
     <div class="detail-cat">${CATEGORY_LABELS[e.category]}${subgenreLabel(e)}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
@@ -382,18 +421,53 @@ function openDetail(id: string) {
       <a class="buy-btn" href="${e.sourceUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">Voir sur ${escapeHTML(e.sourceName)} ↗</a>
     </div>
     <div class="buy-note">Ouvre la billetterie du partenaire dans un nouvel onglet — l'achat se fait chez eux, pas dans l'app</div>
+    <div class="form-actions">
+      <button class="btn" id="share-event">Partager</button>
+    </div>
   `;
   openSheet('detail-sheet');
+}
+
+async function shareCurrentEvent(btn: HTMLElement) {
+  if (!currentDetailId) return;
+  const e = state.events.find((x) => x.id === currentDetailId);
+  if (!e) return;
+  const url = eventUrl(e.id);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: e.title, url });
+    } catch {
+      // annulé par l'utilisateur — rien à faire
+    }
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    const original = btn.textContent;
+    btn.textContent = 'Lien copié !';
+    setTimeout(() => {
+      btn.textContent = original;
+    }, 2000);
+  } catch {
+    // presse-papiers indisponible — pas de repli supplémentaire
+  }
 }
 
 function openSheet(id: string) {
   $('backdrop').classList.add('open');
   $(id).classList.add('open');
 }
-function closeSheets() {
+// updateUrl=false quand la fermeture est déclenchée par une navigation
+// arrière/avant déjà en cours (popstate) : l'URL reflète déjà la nouvelle
+// position, la retoucher ici créerait une entrée d'historique parasite.
+function closeSheets(opts: { updateUrl?: boolean } = {}) {
   $('backdrop').classList.remove('open');
   document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('open'));
   localStorage.setItem(WELCOME_SEEN_KEY, '1');
+  if (currentDetailId) {
+    currentDetailId = null;
+    if (opts.updateUrl !== false) history.pushState({}, '', computeBasePath());
+  }
 }
 
 function updateAccountButton() {
@@ -506,7 +580,7 @@ function showCarteTab() {
 async function loadEvents() {
   $('accueil-list').innerHTML = '<div class="load-state">Chargement des sorties…</div>';
   try {
-    const res = await fetch(`${import.meta.env.BASE_URL}data/events.json`, { cache: 'no-store' });
+    const res = await fetch(`${computeBasePath()}data/events.json`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const file = (await res.json()) as EventsFile;
     state.events = file.events;
@@ -517,7 +591,29 @@ async function loadEvents() {
   }
   renderAll();
   mapController?.setEvents(topMapEvents());
+  return routeFromLocation();
 }
+
+// Ouvre directement la fiche correspondant à /spectacle/<slug>/ si l'URL
+// courante en pointe une (partage, lien indexé) — appelé une fois les
+// événements chargés puisque la résolution dépend de state.events.
+function routeFromLocation(): boolean {
+  const base = computeBasePath();
+  const path = window.location.pathname;
+  if (!path.startsWith(`${base}spectacle/`)) return false;
+  const rest = path.slice(`${base}spectacle/`.length);
+  const slug = rest.split('/')[0];
+  if (!slug) return false;
+  const id = idFromSlug(decodeURIComponent(slug));
+  if (!state.events.some((e) => e.id === id)) return false;
+  openDetail(id, { updateUrl: false });
+  return true;
+}
+
+window.addEventListener('popstate', () => {
+  const opened = routeFromLocation();
+  if (!opened) closeSheets({ updateUrl: false });
+});
 
 async function handleSignIn() {
   const email = ($('account-email-input') as HTMLInputElement).value.trim();
@@ -595,6 +691,12 @@ document.addEventListener('click', (ev) => {
   const openEl = target.closest<HTMLElement>('[data-open]');
   if (openEl) {
     openDetail(openEl.dataset.open!);
+    return;
+  }
+
+  const shareBtn = target.closest<HTMLElement>('#share-event');
+  if (shareBtn) {
+    void shareCurrentEvent(shareBtn);
     return;
   }
 
@@ -733,5 +835,6 @@ async function maybeShowWelcome() {
 }
 
 setGreeting();
-loadEvents();
-void maybeShowWelcome();
+void loadEvents().then((routed) => {
+  if (!routed) void maybeShowWelcome();
+});
