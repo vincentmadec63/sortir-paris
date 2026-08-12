@@ -202,10 +202,6 @@ body{
 .verified{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:0.62rem;color:var(--amber-dim);margin-top:4px;}
 .highlight-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:0.62rem;letter-spacing:0.02em;color:var(--amber);font-weight:700;text-transform:none;}
 
-.cat-legend{display:flex;gap:12px;flex-wrap:wrap;padding:10px 0 8px;font-size:0.66rem;color:var(--ink-soft);}
-.cat-legend span{display:flex;align-items:center;gap:5px;}
-.cat-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
-
 .leaflet-map{
   height:min(360px,50vh);
   border-radius:18px;

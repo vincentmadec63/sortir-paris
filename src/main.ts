@@ -83,6 +83,7 @@ const state: {
   filters: Filters;
   favorites: Set<string>;
   query: string;
+  mapCat: Category | 'all';
 } = {
   events: [],
   cat: 'all',
@@ -90,6 +91,7 @@ const state: {
   filters: { price: null, zone: null, rating: null, when: null, sort: null, highlight: null },
   favorites: loadFavorites(),
   query: '',
+  mapCat: 'all',
 };
 
 function loadFavorites(): Set<string> {
@@ -339,10 +341,6 @@ function renderAll() {
     ? upcoming.map(cardHTML).join('')
     : '<div class="empty-state">Aucun événement chargé pour l’instant.</div>';
 
-  const ephemereList = state.events.filter((e) => e.category === 'ephemere');
-  renderCardList('ephemere-list', ephemereList);
-  $('ephemere-empty').hidden = ephemereList.length > 0;
-
   $('carte-list').innerHTML = topMapEvents().slice(0, 6).map(cardHTML).join('');
   renderExplorer();
   renderFavoris();
@@ -559,12 +557,27 @@ const MAP_MAX_PINS = 150;
 
 // La carte n'a de sens que pour repérer les meilleures adresses, pas pour
 // dumper les 1800+ événements dessus (retour utilisateur : "ça ne sert à
-// rien"). On ne garde que les mieux notés et les coups de cœur.
+// rien"). On ne garde que les mieux notés et les coups de cœur, filtrés
+// selon la catégorie choisie dans la carte elle-même (indépendante du
+// filtre d'Explorer).
 function topMapEvents(): EventItem[] {
   return [...state.events]
+    .filter((e) => state.mapCat === 'all' || e.category === state.mapCat)
     .filter((e) => e.highlighted || (e.rating && (e.reviewsCount ?? 0) >= MAP_MIN_REVIEWS))
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
     .slice(0, MAP_MAX_PINS);
+}
+
+function renderCarteChips() {
+  $('carte-chip-row').innerHTML = CATS.map(
+    (c) => `<div class="chip ${state.mapCat === c.v ? 'active' : ''}" data-mapcat="${c.v}">${c.l}</div>`
+  ).join('');
+}
+
+function refreshCarte() {
+  renderCarteChips();
+  mapController?.setEvents(topMapEvents());
+  $('carte-list').innerHTML = topMapEvents().slice(0, 6).map(cardHTML).join('');
 }
 
 function showCarteTab() {
@@ -572,6 +585,7 @@ function showCarteTab() {
     mapController = setupMap('leaflet-map', (id) => openDetail(id));
     mapController.setEvents(topMapEvents());
   }
+  renderCarteChips();
   requestAnimationFrame(() => mapController?.invalidateSize());
 }
 
@@ -711,6 +725,13 @@ document.addEventListener('click', (ev) => {
     state.tag = state.tag === tagChip.dataset.tag ? null : tagChip.dataset.tag!;
     listPageSize.delete('explorer-list');
     renderExplorer();
+    return;
+  }
+
+  const mapCatChip = target.closest<HTMLElement>('[data-mapcat]');
+  if (mapCatChip) {
+    state.mapCat = mapCatChip.dataset.mapcat as Category | 'all';
+    refreshCarte();
     return;
   }
 
