@@ -24,6 +24,13 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // Les fiches /spectacle/<slug>/ sont des pages statiques générées
+        // après coup (scripts/generate-event-pages.mjs), pas précachées par
+        // le SW : sans ce denylist, le fallback de navigation par défaut
+        // renverrait le shell racine mis en cache au lieu de la vraie page
+        // (mauvaises balises SEO/partage pour un utilisateur qui a déjà
+        // l'app installée et ouvre un lien partagé vers un nouvel événement).
+        navigateFallbackDenylist: [/\/spectacle\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.endsWith('/data/events.json'),

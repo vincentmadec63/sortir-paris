@@ -15,11 +15,6 @@ const DATA_FILE = path.join(ROOT, 'public', 'data', 'events.json');
 const OUT_DIR = path.join(ROOT, 'dist', 'spectacle');
 
 const SITE_URL = 'https://vincentmadec63.github.io/sortir-paris';
-// Chemin racine absolu du site (ex. "/sortir-paris/") — injecté dans chaque
-// page statique pour que le JS de l'app (computeBasePath dans src/main.ts)
-// sache retrouver la racine même si le document est servi 2 niveaux plus
-// bas (dist/spectacle/<slug>/), où document.baseURI ne suffit plus.
-const SITE_BASE_PATH = new URL(`${SITE_URL}/`).pathname;
 
 function slugFromId(id) {
   return id.replace(':', '-');
@@ -70,7 +65,6 @@ async function main() {
       `<meta property="og:image" content="${escapeHtml(e.imageUrl)}" />`,
       `<meta property="og:url" content="${url}" />`,
       `<meta name="twitter:card" content="summary_large_image" />`,
-      `<script>window.__APP_BASE__=${JSON.stringify(SITE_BASE_PATH)};</script>`,
     ].join('\n  ');
 
     const html = rebased.replace('<title>Sortir Paris</title>', metaBlock);

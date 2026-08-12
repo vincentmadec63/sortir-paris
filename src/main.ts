@@ -27,20 +27,18 @@ const WELCOME_SEEN_KEY = 'sortir-paris:welcome-seen';
 // avec son premier ":" remplacé par un "-" (ex. "theatreonline:52725" ->
 // "theatreonline-52725"), réversible car les préfixes de source ne
 // contiennent jamais de tiret.
-// Sur la page racine, document.baseURI donne le bon chemin. Mais sur une
-// page statique générée (dist/spectacle/<slug>/), le document est servi 2
-// niveaux plus bas — scripts/generate-event-pages.mjs y injecte donc
-// window.__APP_BASE__ avec le vrai chemin racine du site, prioritaire ici.
-// Calculé UNE SEULE FOIS au chargement : document.baseURI suit ensuite les
-// pushState du routing client, donc le recalculer après coup renverrait le
-// chemin de la fiche affichée au lieu de la vraie racine du site.
-const APP_BASE_PATH: string = (() => {
-  const injected = (window as unknown as { __APP_BASE__?: string }).__APP_BASE__;
-  if (typeof injected === 'string') return injected;
-  return new URL('.', document.baseURI).pathname;
-})();
+// La racine du site est déduite du chemin actuel plutôt que de
+// document.baseURI : le service worker de la PWA sert parfois le shell
+// racine en réponse à une navigation profonde (cache offline-first), auquel
+// cas document.baseURI ne reflète pas la vraie profondeur du document livré
+// — alors que window.location.pathname, lui, reste toujours le chemin
+// réellement demandé, fiable dans tous les cas (page statique fraîche,
+// fallback SPA en dev, ou shell mis en cache par le service worker).
 function computeBasePath(): string {
-  return APP_BASE_PATH;
+  const marker = '/spectacle/';
+  const idx = window.location.pathname.indexOf(marker);
+  if (idx !== -1) return window.location.pathname.slice(0, idx + 1);
+  return new URL('.', document.baseURI).pathname;
 }
 function slugFromId(id: string): string {
   return id.replace(':', '-');
