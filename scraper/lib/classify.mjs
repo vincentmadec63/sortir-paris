@@ -31,10 +31,11 @@ const CATEGORY_KEYWORDS = [
     'restaurant ephemere', 'cantine ephemere', 'friperie ephemere', 'marche ephemere',
     'boutique temporaire', 'store temporaire', 'espace ephemere', 'lieu ephemere',
     'marche de noel', 'experience immersive ephemere']],
-  ['evenement', ['festival', 'exposition', 'vernissage', 'biennale', 'nocturne',
-    'spectacle', 'cirque', 'danse', 'opera', 'ballet', 'projection',
-    'avant-premiere', 'patrimoine', 'salon du livre',
-    'marche nocturne']],
+  // "Spectacles" : recentré sur le spectacle vivant (pas les expos/visites
+  // patrimoniales, qui n'en sont pas) suite au retour utilisateur.
+  ['evenement', ['spectacle', 'cirque', 'danse', 'opera', 'ballet', 'cabaret',
+    'revue', 'comedie musicale', 'music-hall', 'projection', 'avant-premiere',
+    'festival']],
 ];
 
 export function isExcluded(text) {

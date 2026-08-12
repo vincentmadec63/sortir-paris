@@ -118,16 +118,13 @@ ci-dessus) :
 Rien à changer côté code — dès que c'est configuré côté Supabase, le bouton
 Google fonctionne.
 
-### KYC / profil (âge, centres d'intérêt, humour, spectacle)
+### Préférences
 
-À la première connexion (email ou Google), un court formulaire s'affiche
-pour choisir : tranche d'âge, catégories qui intéressent (réutilise les tags
-existants), type d'humour préféré (si stand-up coché), type de spectacle
-préféré (si théâtre coché), et zone "chez moi". Modifiable à tout moment via
-**Compte → Modifier mon profil**. Ces informations affinent la sélection sur
-l'écran Accueil (catégories/zone en filtre, humour/spectacle en tri de
-préférence par correspondance de mots-clés — pas un filtrage strict, voir
-limites plus haut).
+Une fois connecté (email ou Google), la feuille "Compte" propose de choisir
+les catégories qui intéressent et une zone "chez moi" — appliqué
+automatiquement comme filtre sur l'écran Accueil, synchronisé entre
+appareils. Pas de questionnaire à l'inscription : juste ces deux réglages,
+modifiables à tout moment.
 
 ## Mettre en ligne (gratuit, via GitHub)
 

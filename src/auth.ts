@@ -5,26 +5,12 @@ export interface Preferences {
   favoriteCategories: Category[];
   homeZone: Zone | null;
   favoriteEventIds: string[];
-  ageRange: string | null;
-  humorTypes: string[];
-  showTypes: string[];
-  budget: string | null;
-  audience: string | null;
-  whenPref: string | null;
-  kycCompleted: boolean;
 }
 
 export const EMPTY_PREFS: Preferences = {
   favoriteCategories: [],
   homeZone: null,
   favoriteEventIds: [],
-  ageRange: null,
-  humorTypes: [],
-  showTypes: [],
-  budget: null,
-  audience: null,
-  whenPref: null,
-  kycCompleted: false,
 };
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -75,9 +61,7 @@ export async function loadPreferences(userId: string): Promise<Preferences> {
   if (!client) return EMPTY_PREFS;
   const { data, error } = await client
     .from('preferences')
-    .select(
-      'favorite_categories, home_zone, favorite_event_ids, age_range, humor_types, show_types, budget, audience, when_pref, kyc_completed'
-    )
+    .select('favorite_categories, home_zone, favorite_event_ids')
     .eq('user_id', userId)
     .maybeSingle();
   if (error || !data) return EMPTY_PREFS;
@@ -85,13 +69,6 @@ export async function loadPreferences(userId: string): Promise<Preferences> {
     favoriteCategories: (data.favorite_categories ?? []) as Category[],
     homeZone: (data.home_zone ?? null) as Zone | null,
     favoriteEventIds: (data.favorite_event_ids ?? []) as string[],
-    ageRange: (data.age_range ?? null) as string | null,
-    humorTypes: (data.humor_types ?? []) as string[],
-    showTypes: (data.show_types ?? []) as string[],
-    budget: (data.budget ?? null) as string | null,
-    audience: (data.audience ?? null) as string | null,
-    whenPref: (data.when_pref ?? null) as string | null,
-    kycCompleted: Boolean(data.kyc_completed),
   };
 }
 
@@ -102,13 +79,6 @@ export async function savePreferences(userId: string, prefs: Preferences): Promi
     favorite_categories: prefs.favoriteCategories,
     home_zone: prefs.homeZone,
     favorite_event_ids: prefs.favoriteEventIds,
-    age_range: prefs.ageRange,
-    humor_types: prefs.humorTypes,
-    show_types: prefs.showTypes,
-    budget: prefs.budget,
-    audience: prefs.audience,
-    when_pref: prefs.whenPref,
-    kyc_completed: prefs.kycCompleted,
     updated_at: new Date().toISOString(),
   });
   return error?.message ?? null;

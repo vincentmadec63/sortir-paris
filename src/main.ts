@@ -22,14 +22,6 @@ registerSW({ immediate: true });
 
 const WELCOME_SEEN_KEY = 'sortir-paris:welcome-seen';
 
-const AGE_RANGES = ['13-17', '18-24', '25-34', '35-44', '45-54', '55+'];
-const HUMOR_TYPES = ['Absurde', 'Observationnel', 'Noir', 'Satire politique', 'Impro', 'Autodérision'];
-const SHOW_TYPES = ['Comédie', 'Drame', 'Classique', 'Contemporain', 'Musical', 'Cirque', 'Danse'];
-const BUDGET_OPTIONS = ['Gratuit', 'Moins de 20€', '20–40€', 'Plus de 40€'];
-const AUDIENCE_OPTIONS = ['Seul·e', 'En couple', 'Entre amis', 'En famille avec enfants'];
-const WHEN_OPTIONS = ['Semaine en soirée', 'Week-end', 'Peu importe'];
-const FAMILY_KEYWORDS = ['enfant', 'famille', 'jeune public', 'tout public', 'dès '];
-
 let currentSession: Session | null = null;
 let currentPrefs: Preferences = EMPTY_PREFS;
 
@@ -39,7 +31,7 @@ const CATS: { v: Category | 'all'; l: string }[] = [
   { v: 'standup', l: 'Stand-up' },
   { v: 'concert', l: 'Concert' },
   { v: 'ephemere', l: 'Pop-up' },
-  { v: 'evenement', l: 'Événement' },
+  { v: 'evenement', l: 'Spectacles' },
 ];
 
 const FAVORITES_KEY = 'sortir-paris:favorites';
@@ -195,40 +187,6 @@ function isThisWeek(iso: string): boolean {
   return d >= now && d <= now + 7 * 24 * 3600 * 1000;
 }
 
-// Boost léger (pas un filtre dur) : les données scrapées n'ont pas de
-// sous-genre structuré, donc on fait une correspondance de mots-clés dans
-// le titre/description plutôt qu'un vrai filtrage précis.
-function kycBoost(e: EventItem): number {
-  if (!currentSession) return 0;
-  const haystack = `${e.title} ${e.description ?? ''}`.toLowerCase();
-  const terms = [...currentPrefs.humorTypes, ...currentPrefs.showTypes];
-  let score = terms.reduce((s, term) => (haystack.includes(term.toLowerCase()) ? s + 1 : s), 0);
-
-  if (currentPrefs.audience === 'En famille avec enfants' && FAMILY_KEYWORDS.some((k) => haystack.includes(k))) {
-    score += 2;
-  }
-
-  if (currentPrefs.whenPref && currentPrefs.whenPref !== 'Peu importe' && e.dateStart) {
-    const d = new Date(e.dateStart);
-    const day = d.getDay(); // 0 = dimanche, 6 = samedi
-    const isWeekend = day === 0 || day === 6;
-    const isWeekdayEvening = !isWeekend && d.getHours() >= 17;
-    if (currentPrefs.whenPref === 'Week-end' && isWeekend) score += 1;
-    if (currentPrefs.whenPref === 'Semaine en soirée' && isWeekdayEvening) score += 1;
-  }
-
-  return score;
-}
-
-function matchesBudget(e: EventItem, budget: string): boolean {
-  if (e.price === null || e.price === undefined) return false;
-  if (budget === 'Gratuit') return e.price === 0;
-  if (budget === 'Moins de 20€') return e.price > 0 && e.price < 20;
-  if (budget === '20–40€') return e.price >= 20 && e.price <= 40;
-  if (budget === 'Plus de 40€') return e.price > 40;
-  return true;
-}
-
 function matchesWhen(e: EventItem, when: string): boolean {
   if (!e.dateStart) return false;
   const d = new Date(e.dateStart);
@@ -289,21 +247,16 @@ function renderAll() {
     : '<div class="empty-state">Rien de neuf depuis la dernière mise à jour.</div>';
 
   let upcoming = [...state.events].filter((e) => isThisWeek(e.dateStart) || !e.dateStart);
-  const hasPrefs =
-    currentSession && (currentPrefs.favoriteCategories.length > 0 || currentPrefs.homeZone || currentPrefs.budget);
+  const hasPrefs = currentSession && (currentPrefs.favoriteCategories.length > 0 || currentPrefs.homeZone);
   if (hasPrefs) {
     const preferred = upcoming.filter(
       (e) =>
         (currentPrefs.favoriteCategories.length === 0 || currentPrefs.favoriteCategories.includes(e.category)) &&
-        (!currentPrefs.homeZone || e.zone === currentPrefs.homeZone) &&
-        (!currentPrefs.budget || matchesBudget(e, currentPrefs.budget))
+        (!currentPrefs.homeZone || e.zone === currentPrefs.homeZone)
     );
     if (preferred.length > 0) upcoming = preferred;
   }
-  upcoming = upcoming
-    .sort((a, b) => a.dateStart.localeCompare(b.dateStart))
-    .sort((a, b) => kycBoost(b) - kycBoost(a))
-    .slice(0, 8);
+  upcoming = upcoming.sort((a, b) => a.dateStart.localeCompare(b.dateStart)).slice(0, 8);
   $('screen-accueil').querySelector('.screen-sub')!.textContent = hasPrefs
     ? 'Sélection selon tes préférences.'
     : "Voici ce qu'il ne faut pas rater cette semaine.";
@@ -315,7 +268,7 @@ function renderAll() {
   renderCardList('ephemere-list', ephemereList);
   $('ephemere-empty').hidden = ephemereList.length > 0;
 
-  $('carte-list').innerHTML = state.events.slice(0, 6).map(cardHTML).join('');
+  $('carte-list').innerHTML = topMapEvents().slice(0, 6).map(cardHTML).join('');
   renderExplorer();
   renderFavoris();
 }
@@ -379,73 +332,6 @@ function updateAccountButton() {
   $('open-account').classList.toggle('logged-in', Boolean(currentSession));
 }
 
-let accountView: 'prefs' | 'kyc' = 'prefs';
-
-function chipGroup(id: string, options: string[], selected: string[], dataAttr: string): string {
-  return `<div class="filter-options" id="${id}">
-    ${options
-      .map((o) => `<div class="filter-opt ${selected.includes(o) ? 'sel' : ''}" data-${dataAttr}="${escapeHTML(o)}">${escapeHTML(o)}</div>`)
-      .join('')}
-  </div>`;
-}
-
-function kycFormHTML(): string {
-  const wantsStandup = currentPrefs.favoriteCategories.includes('standup');
-  const wantsTheatre = currentPrefs.favoriteCategories.includes('theatre');
-  return `
-    <h3 class="sheet-heading">Personnalise tes recommandations</h3>
-    <p class="form-note">Ces infos nous aident à te proposer les bonnes sorties en priorité. Modifiable à tout moment.</p>
-    <div class="filter-group">
-      <h4>Ton âge</h4>
-      ${chipGroup('kyc-age', AGE_RANGES, currentPrefs.ageRange ? [currentPrefs.ageRange] : [], 'kyc-age')}
-    </div>
-    <div class="filter-group">
-      <h4>Centres d'intérêt</h4>
-      <div class="filter-options" id="pref-categories">
-        ${CATS.filter((c) => c.v !== 'all')
-          .map(
-            (c) =>
-              `<div class="filter-opt ${currentPrefs.favoriteCategories.includes(c.v as Category) ? 'sel' : ''}" data-pref-cat="${c.v}">${c.l}</div>`
-          )
-          .join('')}
-      </div>
-    </div>
-    ${
-      wantsStandup
-        ? `<div class="filter-group"><h4>Type d'humour préféré</h4>${chipGroup('kyc-humor', HUMOR_TYPES, currentPrefs.humorTypes, 'kyc-humor')}</div>`
-        : ''
-    }
-    ${
-      wantsTheatre
-        ? `<div class="filter-group"><h4>Type de spectacle préféré</h4>${chipGroup('kyc-show', SHOW_TYPES, currentPrefs.showTypes, 'kyc-show')}</div>`
-        : ''
-    }
-    <div class="filter-group">
-      <h4>Budget habituel</h4>
-      ${chipGroup('kyc-budget', BUDGET_OPTIONS, currentPrefs.budget ? [currentPrefs.budget] : [], 'kyc-budget')}
-    </div>
-    <div class="filter-group">
-      <h4>Tu sors plutôt...</h4>
-      ${chipGroup('kyc-audience', AUDIENCE_OPTIONS, currentPrefs.audience ? [currentPrefs.audience] : [], 'kyc-audience')}
-    </div>
-    <div class="filter-group">
-      <h4>Quand ?</h4>
-      ${chipGroup('kyc-when', WHEN_OPTIONS, currentPrefs.whenPref ? [currentPrefs.whenPref] : [], 'kyc-when')}
-    </div>
-    <div class="filter-group">
-      <h4>Zone "chez moi"</h4>
-      <div class="filter-options" id="pref-zone">
-        <div class="filter-opt ${currentPrefs.homeZone === 'paris' ? 'sel' : ''}" data-pref-zone="paris">Paris</div>
-        <div class="filter-opt ${currentPrefs.homeZone === 'petite_couronne' ? 'sel' : ''}" data-pref-zone="petite_couronne">Petite couronne</div>
-        <div class="filter-opt ${currentPrefs.homeZone === 'grande_couronne' ? 'sel' : ''}" data-pref-zone="grande_couronne">Grande couronne</div>
-      </div>
-    </div>
-    <div class="form-actions">
-      <button class="btn primary" id="account-save-kyc">${currentPrefs.kycCompleted ? 'Enregistrer' : 'Terminer mon profil'}</button>
-    </div>
-  `;
-}
-
 function renderAccountSheet(error?: string) {
   const el = $('account-content');
   const isFirstRun = !localStorage.getItem(WELCOME_SEEN_KEY) && !currentSession;
@@ -487,16 +373,30 @@ function renderAccountSheet(error?: string) {
     return;
   }
 
-  if (!currentPrefs.kycCompleted || accountView === 'kyc') {
-    el.innerHTML = kycFormHTML() + (error ? `<div class="form-error">${escapeHTML(error)}</div>` : '');
-    return;
-  }
-
   el.innerHTML = `
     <h3 class="sheet-heading">Compte</h3>
     <div class="account-email">${escapeHTML(currentSession.user.email ?? '')}</div>
+    <div class="filter-group">
+      <h4>Tes catégories préférées</h4>
+      <div class="filter-options" id="pref-categories">
+        ${CATS.filter((c) => c.v !== 'all')
+          .map(
+            (c) =>
+              `<div class="filter-opt ${currentPrefs.favoriteCategories.includes(c.v as Category) ? 'sel' : ''}" data-pref-cat="${c.v}">${c.l}</div>`
+          )
+          .join('')}
+      </div>
+    </div>
+    <div class="filter-group">
+      <h4>Zone "chez moi"</h4>
+      <div class="filter-options" id="pref-zone">
+        <div class="filter-opt ${currentPrefs.homeZone === 'paris' ? 'sel' : ''}" data-pref-zone="paris">Paris</div>
+        <div class="filter-opt ${currentPrefs.homeZone === 'petite_couronne' ? 'sel' : ''}" data-pref-zone="petite_couronne">Petite couronne</div>
+        <div class="filter-opt ${currentPrefs.homeZone === 'grande_couronne' ? 'sel' : ''}" data-pref-zone="grande_couronne">Grande couronne</div>
+      </div>
+    </div>
     <div class="form-actions">
-      <button class="btn" id="account-edit-profile">Modifier mon profil</button>
+      <button class="btn primary" id="account-save-prefs">Enregistrer</button>
     </div>
     <div class="form-actions">
       <button class="btn danger" id="account-signout">Se déconnecter</button>
@@ -514,10 +414,23 @@ function setGreeting() {
 
 let mapController: MapController | null = null;
 
+const MAP_MIN_REVIEWS = 10;
+const MAP_MAX_PINS = 150;
+
+// La carte n'a de sens que pour repérer les meilleures adresses, pas pour
+// dumper les 1800+ événements dessus (retour utilisateur : "ça ne sert à
+// rien"). On ne garde que les mieux notés et les coups de cœur.
+function topMapEvents(): EventItem[] {
+  return [...state.events]
+    .filter((e) => e.highlighted || (e.rating && (e.reviewsCount ?? 0) >= MAP_MIN_REVIEWS))
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, MAP_MAX_PINS);
+}
+
 function showCarteTab() {
   if (!mapController) {
     mapController = setupMap('leaflet-map', (id) => openDetail(id));
-    mapController.setEvents(state.events);
+    mapController.setEvents(topMapEvents());
   }
   requestAnimationFrame(() => mapController?.invalidateSize());
 }
@@ -535,7 +448,7 @@ async function loadEvents() {
     state.events = [];
   }
   renderAll();
-  mapController?.setEvents(state.events);
+  mapController?.setEvents(topMapEvents());
 }
 
 async function handleSignIn() {
@@ -561,37 +474,15 @@ async function handleSignUp() {
   );
 }
 
-async function handleSaveKyc() {
+async function handleSavePrefs() {
   if (!currentSession) return;
   const favoriteCategories = [...document.querySelectorAll<HTMLElement>('#pref-categories .sel')].map(
     (el) => el.dataset.prefCat as Category
   );
   const homeZoneEl = document.querySelector<HTMLElement>('#pref-zone .sel');
   const homeZone = (homeZoneEl?.dataset.prefZone as Zone | undefined) ?? null;
-  const ageEl = document.querySelector<HTMLElement>('#kyc-age .sel');
-  const ageRange = ageEl?.dataset.kycAge ?? null;
-  const humorTypes = [...document.querySelectorAll<HTMLElement>('#kyc-humor .sel')].map((el) => el.dataset.kycHumor!);
-  const showTypes = [...document.querySelectorAll<HTMLElement>('#kyc-show .sel')].map((el) => el.dataset.kycShow!);
-  const budgetEl = document.querySelector<HTMLElement>('#kyc-budget .sel');
-  const budget = budgetEl?.dataset.kycBudget ?? null;
-  const audienceEl = document.querySelector<HTMLElement>('#kyc-audience .sel');
-  const audience = audienceEl?.dataset.kycAudience ?? null;
-  const whenEl = document.querySelector<HTMLElement>('#kyc-when .sel');
-  const whenPref = whenEl?.dataset.kycWhen ?? null;
-  currentPrefs = {
-    ...currentPrefs,
-    favoriteCategories,
-    homeZone,
-    ageRange,
-    humorTypes,
-    showTypes,
-    budget,
-    audience,
-    whenPref,
-    kycCompleted: true,
-  };
+  currentPrefs = { ...currentPrefs, favoriteCategories, homeZone };
   await savePreferences(currentSession.user.id, currentPrefs);
-  accountView = 'prefs';
   renderAll();
   closeSheets();
 }
@@ -678,40 +569,6 @@ document.addEventListener('click', (ev) => {
     prefZone.classList.add('sel');
     return;
   }
-  const kycAge = target.closest<HTMLElement>('[data-kyc-age]');
-  if (kycAge) {
-    kycAge.parentElement!.querySelectorAll('[data-kyc-age]').forEach((o) => o.classList.remove('sel'));
-    kycAge.classList.add('sel');
-    return;
-  }
-  const kycHumor = target.closest<HTMLElement>('[data-kyc-humor]');
-  if (kycHumor) {
-    kycHumor.classList.toggle('sel');
-    return;
-  }
-  const kycShow = target.closest<HTMLElement>('[data-kyc-show]');
-  if (kycShow) {
-    kycShow.classList.toggle('sel');
-    return;
-  }
-  const kycBudget = target.closest<HTMLElement>('[data-kyc-budget]');
-  if (kycBudget) {
-    kycBudget.parentElement!.querySelectorAll('[data-kyc-budget]').forEach((o) => o.classList.remove('sel'));
-    kycBudget.classList.add('sel');
-    return;
-  }
-  const kycAudience = target.closest<HTMLElement>('[data-kyc-audience]');
-  if (kycAudience) {
-    kycAudience.parentElement!.querySelectorAll('[data-kyc-audience]').forEach((o) => o.classList.remove('sel'));
-    kycAudience.classList.add('sel');
-    return;
-  }
-  const kycWhen = target.closest<HTMLElement>('[data-kyc-when]');
-  if (kycWhen) {
-    kycWhen.parentElement!.querySelectorAll('[data-kyc-when]').forEach((o) => o.classList.remove('sel'));
-    kycWhen.classList.add('sel');
-    return;
-  }
   if (target.closest('#account-google')) {
     void signInWithGoogle();
     return;
@@ -719,11 +576,6 @@ document.addEventListener('click', (ev) => {
   if (target.closest('#account-continue-guest')) {
     localStorage.setItem(WELCOME_SEEN_KEY, '1');
     closeSheets();
-    return;
-  }
-  if (target.closest('#account-edit-profile')) {
-    accountView = 'kyc';
-    renderAccountSheet();
     return;
   }
   if (target.closest('#account-signin')) {
@@ -739,8 +591,8 @@ document.addEventListener('click', (ev) => {
     closeSheets();
     return;
   }
-  if (target.closest('#account-save-kyc')) {
-    void handleSaveKyc();
+  if (target.closest('#account-save-prefs')) {
+    void handleSavePrefs();
     return;
   }
 

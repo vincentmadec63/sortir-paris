@@ -20,6 +20,7 @@ const CATEGORY_PAGES = [
   { slug: 'humour', category: 'standup' },
   { slug: 'comedy-clubs', category: 'standup' },
   { slug: 'concerts', category: 'concert' },
+  { slug: 'spectacles', category: 'evenement' },
 ];
 const MAX_PAGES_PER_CATEGORY = 8; // ~160 fiches/catégorie max, pour rester raisonnable et courtois
 const PAGE_DELAY_MS = 300;

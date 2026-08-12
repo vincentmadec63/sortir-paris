@@ -40,5 +40,5 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   standup: 'Stand-up',
   concert: 'Concert',
   ephemere: 'Pop-up store',
-  evenement: 'Événement',
+  evenement: 'Spectacles',
 };
