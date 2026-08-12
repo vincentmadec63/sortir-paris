@@ -26,11 +26,14 @@ const CATEGORY_KEYWORDS = [
     'dramaturgie', 'mise en scene']],
   ['concert', ['concert', 'recital', 'set acoustique', 'tournee', 'dj set',
     'musique live', 'symphonique', 'philharmonique']],
-  ['ephemere', ['ephemere', 'pop-up', 'pop up', 'concept store', 'boutique ephemere',
-    'bar ephemere']],
+  ['ephemere', ['ephemere', 'pop-up', 'pop up', 'popup', 'concept store', 'boutique ephemere',
+    'bar ephemere', 'corner ephemere', 'flagship ephemere', 'showroom ephemere',
+    'restaurant ephemere', 'cantine ephemere', 'friperie ephemere', 'marche ephemere',
+    'boutique temporaire', 'store temporaire', 'espace ephemere', 'lieu ephemere',
+    'marche de noel', 'experience immersive ephemere']],
   ['evenement', ['festival', 'exposition', 'vernissage', 'biennale', 'nocturne',
     'spectacle', 'cirque', 'danse', 'opera', 'ballet', 'projection',
-    'avant-premiere', 'patrimoine', 'salon du livre', 'marche de noel',
+    'avant-premiere', 'patrimoine', 'salon du livre',
     'marche nocturne']],
 ];
 

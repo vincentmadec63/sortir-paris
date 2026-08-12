@@ -13,6 +13,12 @@
   --display:"Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;
   --body:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
   --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+
+  --cat-theatre:#DCA84F;
+  --cat-standup:#E0713F;
+  --cat-concert:#9C85E0;
+  --cat-popup:#4FB0A5;
+  --cat-evenement:#C1573D;
 }
 :root[data-theme="light"]{
   --bg:#F3ECDD;
@@ -26,12 +32,19 @@
   --brick:#A8432F;
   --line:rgba(34,28,44,0.10);
   --line-strong:rgba(34,28,44,0.18);
+  --cat-theatre:#A9702B;
+  --cat-standup:#B85530;
+  --cat-concert:#6F58B8;
+  --cat-popup:#2E8177;
+  --cat-evenement:#A8432F;
 }
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
     --bg:#F3ECDD; --surface:#FFFCF5; --surface-2:#FBF3E2; --ink:#221C2C;
     --ink-soft:#5E5468; --ink-faint:#8B8092; --amber:#A9702B; --amber-dim:#8C5C22;
     --brick:#A8432F; --line:rgba(34,28,44,0.10); --line-strong:rgba(34,28,44,0.18);
+    --cat-theatre:#A9702B; --cat-standup:#B85530; --cat-concert:#6F58B8;
+    --cat-popup:#2E8177; --cat-evenement:#A8432F;
   }
 }
 *{box-sizing:border-box;}
@@ -147,10 +160,33 @@ body{
 
 .verified{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:0.62rem;color:var(--amber-dim);margin-top:4px;}
 
-.map-wrap{margin-top:10px;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2);}
-.zone-legend{display:flex;gap:14px;padding:12px 14px 4px;font-size:0.68rem;color:var(--ink-soft);}
-.zone-legend span{display:flex;align-items:center;gap:5px;}
-.zone-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.cat-legend{display:flex;gap:12px;flex-wrap:wrap;padding:10px 0 8px;font-size:0.66rem;color:var(--ink-soft);}
+.cat-legend span{display:flex;align-items:center;gap:5px;}
+.cat-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
+.leaflet-map{
+  height:min(360px,50vh);
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:var(--surface-2);
+}
+.map-pin{background:none !important;border:none !important;}
+.map-pin span{
+  display:block;width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--surface);box-shadow:0 1px 5px rgba(0,0,0,0.45);
+}
+.marker-cluster{background:color-mix(in srgb, var(--amber) 25%, transparent) !important;}
+.marker-cluster div{
+  background:var(--amber) !important;color:#1A1420 !important;
+  font-family:var(--body) !important;font-weight:700 !important;
+}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--surface) !important;color:var(--ink) !important;}
+.leaflet-control-attribution{
+  background:color-mix(in srgb, var(--surface) 85%, transparent) !important;
+  color:var(--ink-faint) !important;font-size:0.6rem !important;
+}
+.leaflet-control-attribution a{color:var(--ink-soft) !important;}
 
 .tabbar{
   flex-shrink:0;display:flex;justify-content:space-around;align-items:center;
@@ -225,6 +261,12 @@ body{
 
 .load-state{text-align:center;padding:60px 20px;color:var(--ink-faint);font-size:0.85rem;}
 .load-state.error{color:var(--brick);}
+
+.load-more-btn{
+  display:block;width:100%;margin:4px 0 16px;padding:12px;
+  background:var(--surface-2);border:1px solid var(--line-strong);border-radius:12px;
+  color:var(--ink);font-family:var(--body);font-size:0.82rem;font-weight:600;cursor:pointer;
+}
 
 @media (min-width:481px){
   body{background:

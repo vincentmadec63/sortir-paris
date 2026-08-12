@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchText, sleep, mapLimit } from '../lib/http.mjs';
 import { extractJsonLd, findByType } from '../lib/jsonld.mjs';
 import { zoneForPostalCode } from '../lib/zones.mjs';
+import { centroidForPostalCode } from '../lib/geocode.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_FILE = path.join(__dirname, '..', '.cache', 'billetreduc.json');
@@ -81,6 +82,9 @@ async function fetchEventDetail(url, category) {
   const imageUrl = Array.isArray(ev.image) ? ev.image[0] : ev.image;
   if (!imageUrl) return null; // pas de photo => pas de fiche, comme demandé
 
+  const coords = centroidForPostalCode(postalCode);
+  if (!coords) return null;
+
   const { price, priceLabel } = priceFromOffers(ev.offers);
   const rating = ev.aggregateRating
     ? (Number(ev.aggregateRating.ratingValue) / Number(ev.aggregateRating.bestRating || 10)) * 5
@@ -93,6 +97,8 @@ async function fetchEventDetail(url, category) {
     venue: ev.location?.name || 'Lieu à confirmer',
     address: ev.location?.address?.streetAddress ?? undefined,
     zone,
+    lat: coords.lat,
+    lng: coords.lng,
     price,
     priceLabel,
     dateStart: ev.startDate,

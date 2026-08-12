@@ -7,14 +7,17 @@ import { fileURLToPath } from 'node:url';
 import { ALL_DEPARTMENTS, zoneForDepartment } from '../lib/zones.mjs';
 import { classify, isExcluded } from '../lib/classify.mjs';
 import { parsePrice } from '../lib/price.mjs';
+import { centroidForPostalCode } from '../lib/geocode.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_FILE = path.join(__dirname, '..', '.cache', 'openagenda.json');
 
 const API_BASE = 'https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/records';
 const PAGE_SIZE = 100;
-const MAX_PAGES = 50;
-const TARGET_MATCHES = 600;
+// Pas de quota total : un arrêt anticipé dès qu'assez d'"événements"
+// génériques sont trouvés empêchait le scan d'aller assez loin pour
+// dénicher les rares mentions de pop-up. On va au bout du budget de pages.
+const MAX_PAGES = 60;
 
 function buildWhereClause() {
   const inList = ALL_DEPARTMENTS.map((d) => JSON.stringify(d)).join(',');
@@ -57,6 +60,9 @@ function toEventItem(record) {
 
   const { price, priceLabel } = parsePrice(record.conditions_fr);
 
+  const coords = record.location_coordinates ?? centroidForPostalCode(record.location_postalcode);
+  if (!coords) return null; // pas de position exploitable pour la carte
+
   return {
     id: `openagenda:${record.uid}`,
     title: record.title_fr ?? 'Sans titre',
@@ -64,6 +70,8 @@ function toEventItem(record) {
     venue: record.location_name || record.location_city || 'Lieu à confirmer',
     address: record.location_address ?? undefined,
     zone,
+    lat: coords.lat,
+    lng: coords.lng ?? coords.lon,
     price,
     priceLabel,
     dateStart: record.firstdate_begin,
@@ -85,7 +93,7 @@ async function main() {
   let page = 0;
   let totalCount = Infinity;
 
-  while (page < MAX_PAGES && offset < totalCount && byId.size < TARGET_MATCHES) {
+  while (page < MAX_PAGES && offset < totalCount) {
     const data = await fetchPage(offset);
     totalCount = data.total_count;
     for (const record of data.results ?? []) {

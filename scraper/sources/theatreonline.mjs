@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchText, sleep, mapLimit } from '../lib/http.mjs';
 import { load, findScopes, propValue, propScope } from '../lib/microdata.mjs';
 import { zoneForPostalCode } from '../lib/zones.mjs';
+import { centroidForPostalCode } from '../lib/geocode.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_FILE = path.join(__dirname, '..', '.cache', 'theatreonline.json');
@@ -83,6 +84,14 @@ async function fetchEventDetail(url, category) {
   const offers = propScope($, ev, 'offers');
   const agg = propScope($, ev, 'aggregateRating');
 
+  const geo = location && propScope($, location, 'geo');
+  const geoLat = geo ? parseFloat(propValue($, geo, 'latitude')) : NaN;
+  const geoLng = geo ? parseFloat(propValue($, geo, 'longitude')) : NaN;
+  const coords = Number.isFinite(geoLat) && Number.isFinite(geoLng)
+    ? { lat: geoLat, lng: geoLng }
+    : centroidForPostalCode(postalCode);
+  if (!coords) return null;
+
   const lowPrice = offers ? parseFloat(propValue($, offers, 'lowPrice')) : NaN;
   const price = Number.isFinite(lowPrice) ? lowPrice : null;
   const priceLabel = price === null ? 'Tarif à vérifier' : `à partir de ${price}€`;
@@ -101,6 +110,8 @@ async function fetchEventDetail(url, category) {
     venue: (location && propValue($, location, 'name')) || 'Lieu à confirmer',
     address: address ? propValue($, address, 'streetAddress') : undefined,
     zone,
+    lat: coords.lat,
+    lng: coords.lng,
     price,
     priceLabel,
     dateStart: propValue($, ev, 'startDate'),

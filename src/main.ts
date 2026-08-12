@@ -2,6 +2,7 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import type { EventItem, EventsFile, Category, Zone } from './types';
 import { CATEGORY_LABELS } from './types';
+import { setupMap, type MapController } from './map';
 
 registerSW({ immediate: true });
 
@@ -10,11 +11,22 @@ const CATS: { v: Category | 'all'; l: string }[] = [
   { v: 'theatre', l: 'Théâtre' },
   { v: 'standup', l: 'Stand-up' },
   { v: 'concert', l: 'Concert' },
-  { v: 'ephemere', l: 'Éphémère' },
+  { v: 'ephemere', l: 'Pop-up' },
   { v: 'evenement', l: 'Événement' },
 ];
 
 const FAVORITES_KEY = 'sortir-paris:favorites';
+
+const CATEGORY_COLOR_VAR: Record<Category, string> = {
+  theatre: '--cat-theatre',
+  standup: '--cat-standup',
+  concert: '--cat-concert',
+  ephemere: '--cat-popup',
+  evenement: '--cat-evenement',
+};
+function categoryColor(cat: Category): string {
+  return `var(${CATEGORY_COLOR_VAR[cat]})`;
+}
 
 interface Filters {
   price: string | null;
@@ -49,12 +61,6 @@ function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify([...state.favorites]));
 }
 
-function hashIndex(id: string, mod: number): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h % mod;
-}
-
 function starsSvg(): string {
   return '<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6L22 9.6l-5.5 4.9L18 22l-6-4-6 4 1.5-7.5L2 9.6l7.1-1z"/></svg>';
 }
@@ -79,10 +85,10 @@ function ratingHTML(e: EventItem): string {
 
 function heroCardHTML(e: EventItem): string {
   return `<div class="hero-card" data-open="${e.id}">
-    <img class="hc-bg" src="${e.imageUrl}" alt="" loading="lazy" />
+    <img class="hc-bg" src="${e.imageUrl}" alt="" width="200" height="130" loading="lazy" decoding="async" />
     ${e.isNew ? '<div class="badge-new">NOUVEAU</div>' : ''}
     <div class="hc-txt">
-      <div class="hc-cat">${CATEGORY_LABELS[e.category]}</div>
+      <div class="hc-cat" style="color:${categoryColor(e.category)}">${CATEGORY_LABELS[e.category]}</div>
       <div class="hc-title">${escapeHTML(e.title)}</div>
     </div>
   </div>`;
@@ -91,11 +97,11 @@ function heroCardHTML(e: EventItem): string {
 function cardHTML(e: EventItem): string {
   return `<div class="card" data-open="${e.id}">
     ${heart(e.id, state.favorites.has(e.id))}
-    <img class="card-thumb" src="${e.imageUrl}" alt="${escapeHTML(e.title)}" loading="lazy" />
+    <img class="card-thumb" src="${e.imageUrl}" alt="${escapeHTML(e.title)}" width="64" height="64" loading="lazy" decoding="async" />
     <div class="card-body">
       <div class="card-top">
         <div>
-          <div class="card-cat">${CATEGORY_LABELS[e.category]}</div>
+          <div class="card-cat" style="color:${categoryColor(e.category)}">${CATEGORY_LABELS[e.category]}</div>
           <div class="card-title">${escapeHTML(e.title)}</div>
         </div>
       </div>
@@ -107,6 +113,23 @@ function cardHTML(e: EventItem): string {
       </div>
     </div>
   </div>`;
+}
+
+const PAGE_SIZE = 24;
+const listPageSize = new Map<string, number>();
+const listItemsCache = new Map<string, EventItem[]>();
+
+function renderCardList(containerId: string, items: EventItem[]) {
+  listItemsCache.set(containerId, items);
+  const shown = listPageSize.get(containerId) ?? PAGE_SIZE;
+  const slice = items.slice(0, shown);
+  const remaining = items.length - slice.length;
+  const html =
+    slice.map(cardHTML).join('') +
+    (remaining > 0
+      ? `<button class="load-more-btn" data-loadmore="${containerId}">Charger plus (${remaining} restants)</button>`
+      : '');
+  $(containerId).innerHTML = html;
 }
 
 function escapeHTML(s: string): string {
@@ -158,29 +181,12 @@ function renderAll() {
     : '<div class="empty-state">Aucun événement chargé pour l’instant.</div>';
 
   const ephemereList = state.events.filter((e) => e.category === 'ephemere');
-  $('ephemere-list').innerHTML = ephemereList.map(cardHTML).join('');
+  renderCardList('ephemere-list', ephemereList);
   $('ephemere-empty').hidden = ephemereList.length > 0;
 
   $('carte-list').innerHTML = state.events.slice(0, 6).map(cardHTML).join('');
-  renderPins();
   renderExplorer();
   renderFavoris();
-}
-
-function renderPins() {
-  const pins = state.events
-    .slice(0, 30)
-    .map((e, i) => {
-      const base = e.zone === 'paris' ? 46 : e.zone === 'petite_couronne' ? 95 : 130;
-      const r = base + (i % 3) * 12;
-      const a = (hashIndex(e.id, 360) * 13 + i * 47) % 360;
-      const x = 170 + r * Math.cos((a * Math.PI) / 180);
-      const y = 170 + r * Math.sin((a * Math.PI) / 180);
-      const c = e.zone === 'paris' ? 'var(--amber)' : e.zone === 'petite_couronne' ? 'var(--brick)' : 'var(--ink-faint)';
-      return `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="5" fill="${c}" stroke="var(--surface)" stroke-width="1.5"><title>${escapeHTML(e.title)}</title></circle>`;
-    })
-    .join('');
-  $('map-pins').innerHTML = pins;
 }
 
 function renderExplorer() {
@@ -188,7 +194,7 @@ function renderExplorer() {
     (c) => `<div class="chip ${state.cat === c.v ? 'active' : ''}" data-cat="${c.v}">${c.l}</div>`
   ).join('');
   const list = state.events.filter(matchesFilters);
-  $('explorer-list').innerHTML = list.map(cardHTML).join('');
+  renderCardList('explorer-list', list);
   $('explorer-empty').hidden = list.length > 0;
   const count = Object.values(state.filters).filter(Boolean).length;
   $('filter-count').textContent = String(count);
@@ -204,8 +210,8 @@ function openDetail(id: string) {
   const e = state.events.find((x) => x.id === id);
   if (!e) return;
   $('detail-content').innerHTML = `
-    <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" />
-    <div class="detail-cat">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
+    <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" decoding="async" />
+    <div class="detail-cat" style="color:${categoryColor(e.category)}">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
     <div class="detail-title">${escapeHTML(e.title)}</div>
     <div class="detail-meta-row">
       <span>${escapeHTML(e.venue)}</span>
@@ -240,6 +246,16 @@ function setGreeting() {
   el.textContent = hour < 12 ? 'Bonjour.' : hour < 18 ? 'Bon après-midi.' : 'Bonsoir.';
 }
 
+let mapController: MapController | null = null;
+
+function showCarteTab() {
+  if (!mapController) {
+    mapController = setupMap('leaflet-map', (id) => openDetail(id));
+    mapController.setEvents(state.events);
+  }
+  requestAnimationFrame(() => mapController?.invalidateSize());
+}
+
 async function loadEvents() {
   $('accueil-list').innerHTML = '<div class="load-state">Chargement des sorties…</div>';
   try {
@@ -253,6 +269,7 @@ async function loadEvents() {
     state.events = [];
   }
   renderAll();
+  mapController?.setEvents(state.events);
 }
 
 document.addEventListener('click', (ev) => {
@@ -264,6 +281,7 @@ document.addEventListener('click', (ev) => {
     tab.classList.add('active');
     document.querySelectorAll('.screen').forEach((s) => ((s as HTMLElement).hidden = true));
     $('screen-' + tab.dataset.tab).hidden = false;
+    if (tab.dataset.tab === 'carte') showCarteTab();
     return;
   }
 
@@ -277,6 +295,14 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
+  const loadMoreBtn = target.closest<HTMLElement>('[data-loadmore]');
+  if (loadMoreBtn) {
+    const containerId = loadMoreBtn.dataset.loadmore!;
+    listPageSize.set(containerId, (listPageSize.get(containerId) ?? PAGE_SIZE) + PAGE_SIZE);
+    renderCardList(containerId, listItemsCache.get(containerId) ?? []);
+    return;
+  }
+
   const openEl = target.closest<HTMLElement>('[data-open]');
   if (openEl) {
     openDetail(openEl.dataset.open!);
@@ -286,6 +312,7 @@ document.addEventListener('click', (ev) => {
   const chip = target.closest<HTMLElement>('.chip');
   if (chip) {
     state.cat = chip.dataset.cat as Category | 'all';
+    listPageSize.delete('explorer-list');
     renderExplorer();
     return;
   }
@@ -318,6 +345,7 @@ document.addEventListener('click', (ev) => {
   }
 
   if (target.closest('#apply-filters')) {
+    listPageSize.delete('explorer-list');
     renderExplorer();
     closeSheets();
     document.querySelector<HTMLElement>('[data-tab="explorer"]')?.click();
@@ -327,6 +355,7 @@ document.addEventListener('click', (ev) => {
 
 document.getElementById('search-input')?.addEventListener('input', (ev) => {
   state.query = (ev.target as HTMLInputElement).value;
+  listPageSize.delete('explorer-list');
   renderExplorer();
 });
 

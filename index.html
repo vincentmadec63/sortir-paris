@@ -50,29 +50,24 @@
       <div class="screen" id="screen-carte" hidden>
         <div class="screen-title">Carte</div>
         <p class="screen-sub">Paris intra-muros, petite et grande couronne.</p>
-        <div class="map-wrap">
-          <div class="zone-legend">
-            <span><i style="background:var(--amber)"></i>Paris</span>
-            <span><i style="background:var(--brick)"></i>Petite couronne</span>
-            <span><i style="background:var(--ink-faint)"></i>Grande couronne</span>
-          </div>
-          <svg viewBox="0 0 340 340" width="100%" style="display:block">
-            <circle cx="170" cy="170" r="150" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
-            <circle cx="170" cy="170" r="95" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 5"/>
-            <circle cx="170" cy="170" r="46" fill="color-mix(in srgb, var(--amber) 10%, transparent)" stroke="var(--amber)" stroke-width="1.2"/>
-            <g id="map-pins"></g>
-          </svg>
+        <div class="cat-legend">
+          <span><i style="background:var(--cat-theatre)"></i>Théâtre</span>
+          <span><i style="background:var(--cat-standup)"></i>Stand-up</span>
+          <span><i style="background:var(--cat-concert)"></i>Concert</span>
+          <span><i style="background:var(--cat-popup)"></i>Pop-up</span>
+          <span><i style="background:var(--cat-evenement)"></i>Événement</span>
         </div>
+        <div id="leaflet-map" class="leaflet-map"></div>
         <div class="section-label">DANS CETTE ZONE</div>
         <div id="carte-list"></div>
       </div>
 
       <!-- EPHEMERE -->
       <div class="screen" id="screen-ephemere" hidden>
-        <div class="screen-title">Concepts éphémères</div>
+        <div class="screen-title">Pop-up stores</div>
         <p class="screen-sub">Vérifiés par recoupement de sources avant publication.</p>
         <div id="ephemere-list"></div>
-        <div class="empty-state" id="ephemere-empty" hidden>Aucun concept éphémère détecté pour l'instant.</div>
+        <div class="empty-state" id="ephemere-empty" hidden>Aucun pop-up store détecté pour l'instant.</div>
       </div>
 
       <!-- FAVORIS -->
@@ -141,8 +136,8 @@
         Carte
       </button>
       <button class="tab-btn" data-tab="ephemere">
-        <svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
-        Éphémère
+        <svg viewBox="0 0 24 24"><path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
+        Pop-up
       </button>
       <button class="tab-btn" data-tab="favoris">
         <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>

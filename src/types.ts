@@ -8,6 +8,8 @@ export interface EventItem {
   venue: string;
   address?: string;
   zone: Zone;
+  lat: number;
+  lng: number;
   price: number;
   priceLabel: string;
   dateStart: string;
@@ -35,6 +37,6 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   theatre: 'Théâtre',
   standup: 'Stand-up',
   concert: 'Concert',
-  ephemere: 'Concept éphémère',
+  ephemere: 'Pop-up store',
   evenement: 'Événement',
 };
