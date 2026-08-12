@@ -7,6 +7,9 @@ create table public.preferences (
   age_range text,
   humor_types text[] default '{}',
   show_types text[] default '{}',
+  budget text,
+  audience text,
+  when_pref text,
   kyc_completed boolean default false,
   updated_at timestamptz default now()
 );

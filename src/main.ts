@@ -25,6 +25,10 @@ const WELCOME_SEEN_KEY = 'sortir-paris:welcome-seen';
 const AGE_RANGES = ['13-17', '18-24', '25-34', '35-44', '45-54', '55+'];
 const HUMOR_TYPES = ['Absurde', 'Observationnel', 'Noir', 'Satire politique', 'Impro', 'Autodérision'];
 const SHOW_TYPES = ['Comédie', 'Drame', 'Classique', 'Contemporain', 'Musical', 'Cirque', 'Danse'];
+const BUDGET_OPTIONS = ['Gratuit', 'Moins de 20€', '20–40€', 'Plus de 40€'];
+const AUDIENCE_OPTIONS = ['Seul·e', 'En couple', 'Entre amis', 'En famille avec enfants'];
+const WHEN_OPTIONS = ['Semaine en soirée', 'Week-end', 'Peu importe'];
+const FAMILY_KEYWORDS = ['enfant', 'famille', 'jeune public', 'tout public', 'dès '];
 
 let currentSession: Session | null = null;
 let currentPrefs: Preferences = EMPTY_PREFS;
@@ -39,17 +43,6 @@ const CATS: { v: Category | 'all'; l: string }[] = [
 ];
 
 const FAVORITES_KEY = 'sortir-paris:favorites';
-
-const CATEGORY_COLOR_VAR: Record<Category, string> = {
-  theatre: '--cat-theatre',
-  standup: '--cat-standup',
-  concert: '--cat-concert',
-  ephemere: '--cat-popup',
-  evenement: '--cat-evenement',
-};
-function categoryColor(cat: Category): string {
-  return `var(${CATEGORY_COLOR_VAR[cat]})`;
-}
 
 interface Filters {
   price: string | null;
@@ -106,6 +99,33 @@ function formatDate(iso: string): string {
   }
 }
 
+function formatDateShort(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+// dateStart/dateEnd viennent parfois de la période complète de la série de
+// représentations (pas une seule séance) — on le rend explicite plutôt que
+// d'afficher une date isolée sans contexte.
+function dateSectionHTML(e: EventItem): string {
+  const startDay = e.dateStart?.slice(0, 10);
+  const endDay = e.dateEnd?.slice(0, 10);
+  if (endDay && endDay !== startDay) {
+    return `
+      <div class="section-label" style="margin-top:0">PÉRIODE DE REPRÉSENTATION</div>
+      <div class="avail-row"><div class="avail-pill sel">Du ${escapeHTML(formatDateShort(e.dateStart))} au ${escapeHTML(formatDateShort(e.dateEnd!))}</div></div>
+      <p class="form-note" style="margin-top:-8px;">Dates et horaires précis des séances à vérifier sur la billetterie du partenaire.</p>
+    `;
+  }
+  return `
+    <div class="section-label" style="margin-top:0">PROCHAINE DATE</div>
+    <div class="avail-row"><div class="avail-pill sel">${escapeHTML(formatDate(e.dateStart))}</div></div>
+  `;
+}
+
 function ratingHTML(e: EventItem): string {
   if (!e.rating) return '';
   return `<span class="rating">${starsSvg()} ${e.rating.toFixed(1)}${e.reviewsCount ? ` · ${e.reviewsCount}` : ''}</span>`;
@@ -116,20 +136,20 @@ function heroCardHTML(e: EventItem): string {
     <img class="hc-bg" src="${e.imageUrl}" alt="" width="200" height="130" loading="lazy" decoding="async" />
     ${e.isNew ? '<div class="badge-new">NOUVEAU</div>' : ''}
     <div class="hc-txt">
-      <div class="hc-cat" style="color:${categoryColor(e.category)}">${CATEGORY_LABELS[e.category]}</div>
+      <div class="hc-cat">${CATEGORY_LABELS[e.category]}</div>
       <div class="hc-title">${escapeHTML(e.title)}</div>
     </div>
   </div>`;
 }
 
 function cardHTML(e: EventItem): string {
-  return `<div class="card" data-open="${e.id}">
+  return `<div class="card cat-${e.category}" data-open="${e.id}">
     ${heart(e.id, state.favorites.has(e.id))}
     <img class="card-thumb" src="${e.imageUrl}" alt="${escapeHTML(e.title)}" width="64" height="64" loading="lazy" decoding="async" />
     <div class="card-body">
       <div class="card-top">
         <div>
-          <div class="card-cat" style="color:${categoryColor(e.category)}">${CATEGORY_LABELS[e.category]}</div>
+          <div class="card-cat">${CATEGORY_LABELS[e.category]}</div>
           <div class="card-title">${escapeHTML(e.title)}</div>
         </div>
       </div>
@@ -179,7 +199,31 @@ function kycBoost(e: EventItem): number {
   if (!currentSession) return 0;
   const haystack = `${e.title} ${e.description ?? ''}`.toLowerCase();
   const terms = [...currentPrefs.humorTypes, ...currentPrefs.showTypes];
-  return terms.reduce((score, term) => (haystack.includes(term.toLowerCase()) ? score + 1 : score), 0);
+  let score = terms.reduce((s, term) => (haystack.includes(term.toLowerCase()) ? s + 1 : s), 0);
+
+  if (currentPrefs.audience === 'En famille avec enfants' && FAMILY_KEYWORDS.some((k) => haystack.includes(k))) {
+    score += 2;
+  }
+
+  if (currentPrefs.whenPref && currentPrefs.whenPref !== 'Peu importe' && e.dateStart) {
+    const d = new Date(e.dateStart);
+    const day = d.getDay(); // 0 = dimanche, 6 = samedi
+    const isWeekend = day === 0 || day === 6;
+    const isWeekdayEvening = !isWeekend && d.getHours() >= 17;
+    if (currentPrefs.whenPref === 'Week-end' && isWeekend) score += 1;
+    if (currentPrefs.whenPref === 'Semaine en soirée' && isWeekdayEvening) score += 1;
+  }
+
+  return score;
+}
+
+function matchesBudget(e: EventItem, budget: string): boolean {
+  if (e.price === null || e.price === undefined) return false;
+  if (budget === 'Gratuit') return e.price === 0;
+  if (budget === 'Moins de 20€') return e.price > 0 && e.price < 20;
+  if (budget === '20–40€') return e.price >= 20 && e.price <= 40;
+  if (budget === 'Plus de 40€') return e.price > 40;
+  return true;
 }
 
 function matchesFilters(e: EventItem): boolean {
@@ -211,12 +255,14 @@ function renderAll() {
     : '<div class="empty-state">Rien de neuf depuis la dernière mise à jour.</div>';
 
   let upcoming = [...state.events].filter((e) => isThisWeek(e.dateStart) || !e.dateStart);
-  const hasPrefs = currentSession && (currentPrefs.favoriteCategories.length > 0 || currentPrefs.homeZone);
+  const hasPrefs =
+    currentSession && (currentPrefs.favoriteCategories.length > 0 || currentPrefs.homeZone || currentPrefs.budget);
   if (hasPrefs) {
     const preferred = upcoming.filter(
       (e) =>
         (currentPrefs.favoriteCategories.length === 0 || currentPrefs.favoriteCategories.includes(e.category)) &&
-        (!currentPrefs.homeZone || e.zone === currentPrefs.homeZone)
+        (!currentPrefs.homeZone || e.zone === currentPrefs.homeZone) &&
+        (!currentPrefs.budget || matchesBudget(e, currentPrefs.budget))
     );
     if (preferred.length > 0) upcoming = preferred;
   }
@@ -262,15 +308,14 @@ function openDetail(id: string) {
   if (!e) return;
   $('detail-content').innerHTML = `
     <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" decoding="async" />
-    <div class="detail-cat" style="color:${categoryColor(e.category)}">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
+    <div class="detail-cat">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
     <div class="detail-title">${escapeHTML(e.title)}</div>
     <div class="detail-meta-row">
       <span>${escapeHTML(e.venue)}</span>
       ${e.rating ? `<span class="rating">${starsSvg()} ${e.rating.toFixed(1)} · ${e.reviewsCount ?? 0} avis (${escapeHTML(e.reviewsSource ?? e.sourceName)})</span>` : ''}
     </div>
     ${e.description ? `<div class="detail-desc">${escapeHTML(e.description)}</div>` : ''}
-    <div class="section-label" style="margin-top:0">DATE</div>
-    <div class="avail-row"><div class="avail-pill sel">${escapeHTML(formatDate(e.dateStart))}</div></div>
+    ${dateSectionHTML(e)}
     ${e.rating ? `<div class="review-line">★ Avis importés automatiquement depuis ${escapeHTML(e.reviewsSource ?? e.sourceName)} — non modérés par l'app.</div>` : ''}
     <div class="buy-bar">
       <div class="buy-price">${escapeHTML(e.priceLabel)}<small>par personne</small></div>
@@ -336,6 +381,18 @@ function kycFormHTML(): string {
         ? `<div class="filter-group"><h4>Type de spectacle préféré</h4>${chipGroup('kyc-show', SHOW_TYPES, currentPrefs.showTypes, 'kyc-show')}</div>`
         : ''
     }
+    <div class="filter-group">
+      <h4>Budget habituel</h4>
+      ${chipGroup('kyc-budget', BUDGET_OPTIONS, currentPrefs.budget ? [currentPrefs.budget] : [], 'kyc-budget')}
+    </div>
+    <div class="filter-group">
+      <h4>Tu sors plutôt...</h4>
+      ${chipGroup('kyc-audience', AUDIENCE_OPTIONS, currentPrefs.audience ? [currentPrefs.audience] : [], 'kyc-audience')}
+    </div>
+    <div class="filter-group">
+      <h4>Quand ?</h4>
+      ${chipGroup('kyc-when', WHEN_OPTIONS, currentPrefs.whenPref ? [currentPrefs.whenPref] : [], 'kyc-when')}
+    </div>
     <div class="filter-group">
       <h4>Zone "chez moi"</h4>
       <div class="filter-options" id="pref-zone">
@@ -476,7 +533,24 @@ async function handleSaveKyc() {
   const ageRange = ageEl?.dataset.kycAge ?? null;
   const humorTypes = [...document.querySelectorAll<HTMLElement>('#kyc-humor .sel')].map((el) => el.dataset.kycHumor!);
   const showTypes = [...document.querySelectorAll<HTMLElement>('#kyc-show .sel')].map((el) => el.dataset.kycShow!);
-  currentPrefs = { ...currentPrefs, favoriteCategories, homeZone, ageRange, humorTypes, showTypes, kycCompleted: true };
+  const budgetEl = document.querySelector<HTMLElement>('#kyc-budget .sel');
+  const budget = budgetEl?.dataset.kycBudget ?? null;
+  const audienceEl = document.querySelector<HTMLElement>('#kyc-audience .sel');
+  const audience = audienceEl?.dataset.kycAudience ?? null;
+  const whenEl = document.querySelector<HTMLElement>('#kyc-when .sel');
+  const whenPref = whenEl?.dataset.kycWhen ?? null;
+  currentPrefs = {
+    ...currentPrefs,
+    favoriteCategories,
+    homeZone,
+    ageRange,
+    humorTypes,
+    showTypes,
+    budget,
+    audience,
+    whenPref,
+    kycCompleted: true,
+  };
   await savePreferences(currentSession.user.id, currentPrefs);
   accountView = 'prefs';
   renderAll();
@@ -571,6 +645,24 @@ document.addEventListener('click', (ev) => {
   const kycShow = target.closest<HTMLElement>('[data-kyc-show]');
   if (kycShow) {
     kycShow.classList.toggle('sel');
+    return;
+  }
+  const kycBudget = target.closest<HTMLElement>('[data-kyc-budget]');
+  if (kycBudget) {
+    kycBudget.parentElement!.querySelectorAll('[data-kyc-budget]').forEach((o) => o.classList.remove('sel'));
+    kycBudget.classList.add('sel');
+    return;
+  }
+  const kycAudience = target.closest<HTMLElement>('[data-kyc-audience]');
+  if (kycAudience) {
+    kycAudience.parentElement!.querySelectorAll('[data-kyc-audience]').forEach((o) => o.classList.remove('sel'));
+    kycAudience.classList.add('sel');
+    return;
+  }
+  const kycWhen = target.closest<HTMLElement>('[data-kyc-when]');
+  if (kycWhen) {
+    kycWhen.parentElement!.querySelectorAll('[data-kyc-when]').forEach((o) => o.classList.remove('sel'));
+    kycWhen.classList.add('sel');
     return;
   }
   if (target.closest('#account-google')) {

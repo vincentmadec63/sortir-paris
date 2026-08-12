@@ -153,6 +153,11 @@ body{
   border-radius:14px;margin-bottom:10px;cursor:pointer;position:relative;
 }
 .card:active{transform:scale(0.99);}
+.card.cat-theatre{background:color-mix(in srgb, var(--cat-theatre) 16%, var(--surface-2));}
+.card.cat-standup{background:color-mix(in srgb, var(--cat-standup) 16%, var(--surface-2));}
+.card.cat-concert{background:color-mix(in srgb, var(--cat-concert) 16%, var(--surface-2));}
+.card.cat-ephemere{background:color-mix(in srgb, var(--cat-popup) 16%, var(--surface-2));}
+.card.cat-evenement{background:color-mix(in srgb, var(--cat-evenement) 16%, var(--surface-2));}
 .card-thumb{width:64px;height:64px;border-radius:10px;flex-shrink:0;object-fit:cover;background:var(--surface);}
 .card-body{flex:1;min-width:0;}
 .card-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;}
