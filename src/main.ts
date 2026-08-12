@@ -70,6 +70,38 @@ function loadFavorites(): Set<string> {
   }
 }
 
+// Personnalisation implicite : pas de questionnaire (le KYC explicite a été
+// retiré, rejeté par l'utilisateur) — on apprend silencieusement des goûts
+// à partir de ce que la personne regarde et favorite, sur l'appareil,
+// invité comme connecté.
+const AFFINITY_KEY = 'sortir-paris:affinity';
+
+interface Affinity {
+  categories: Partial<Record<Category, number>>;
+  zones: Partial<Record<Zone, number>>;
+}
+
+function loadAffinity(): Affinity {
+  try {
+    const raw = localStorage.getItem(AFFINITY_KEY);
+    return raw ? (JSON.parse(raw) as Affinity) : { categories: {}, zones: {} };
+  } catch {
+    return { categories: {}, zones: {} };
+  }
+}
+
+const affinity: Affinity = loadAffinity();
+
+function recordAffinity(e: EventItem, weight: number) {
+  affinity.categories[e.category] = (affinity.categories[e.category] ?? 0) + weight;
+  affinity.zones[e.zone] = (affinity.zones[e.zone] ?? 0) + weight;
+  localStorage.setItem(AFFINITY_KEY, JSON.stringify(affinity));
+}
+
+function affinityScore(e: EventItem): number {
+  return (affinity.categories[e.category] ?? 0) + (affinity.zones[e.zone] ?? 0);
+}
+
 function saveFavorites() {
   if (currentSession) {
     currentPrefs = { ...currentPrefs, favoriteEventIds: [...state.favorites] };
@@ -265,7 +297,10 @@ function renderAll() {
     );
     if (preferred.length > 0) upcoming = preferred;
   }
-  upcoming = upcoming.sort((a, b) => a.dateStart.localeCompare(b.dateStart)).slice(0, 8);
+  upcoming = upcoming
+    .sort((a, b) => a.dateStart.localeCompare(b.dateStart))
+    .sort((a, b) => affinityScore(b) - affinityScore(a))
+    .slice(0, 8);
   $('screen-accueil').querySelector('.screen-sub')!.textContent = hasPrefs
     ? 'Sélection selon tes préférences.'
     : "Voici ce qu'il ne faut pas rater cette semaine.";
@@ -329,6 +364,7 @@ function renderFavoris() {
 function openDetail(id: string) {
   const e = state.events.find((x) => x.id === id);
   if (!e) return;
+  recordAffinity(e, 1);
   $('detail-content').innerHTML = `
     <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" decoding="async" />
     <div class="detail-cat">${CATEGORY_LABELS[e.category]}${subgenreLabel(e)}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
@@ -536,7 +572,13 @@ document.addEventListener('click', (ev) => {
   if (heartEl) {
     ev.stopPropagation();
     const id = heartEl.dataset.heart!;
-    state.favorites.has(id) ? state.favorites.delete(id) : state.favorites.add(id);
+    if (state.favorites.has(id)) {
+      state.favorites.delete(id);
+    } else {
+      state.favorites.add(id);
+      const favorited = state.events.find((x) => x.id === id);
+      if (favorited) recordAffinity(favorited, 3);
+    }
     saveFavorites();
     renderAll();
     return;
