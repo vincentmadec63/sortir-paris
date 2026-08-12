@@ -39,6 +39,12 @@
           <input id="search-input" placeholder="Un spectacle, une salle, un quartier…" />
         </div>
         <div class="chip-row" id="chip-row"></div>
+        <div class="chip-row" id="when-row">
+          <div class="chip" data-when="today">Aujourd'hui</div>
+          <div class="chip" data-when="week">Cette semaine</div>
+          <div class="chip" data-when="weekend">Ce week-end</div>
+          <div class="chip" data-when="month">Ce mois</div>
+        </div>
         <button class="filter-btn" id="open-filters">
           <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
           Filtres
@@ -125,6 +131,12 @@
           <div class="filter-options" data-group="rating">
             <div class="filter-opt" data-val="4.5">4.5 et +</div>
             <div class="filter-opt" data-val="4">4.0 et +</div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <h4>Trier par</h4>
+          <div class="filter-options" data-group="sort">
+            <div class="filter-opt" data-val="topRated">Mieux notés (10 avis min.)</div>
           </div>
         </div>
         <button class="filter-apply" id="apply-filters">Voir les résultats</button>

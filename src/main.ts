@@ -48,6 +48,8 @@ interface Filters {
   price: string | null;
   zone: Zone | null;
   rating: string | null;
+  when: string | null;
+  sort: string | null;
 }
 
 const state: {
@@ -59,7 +61,7 @@ const state: {
 } = {
   events: [],
   cat: 'all',
-  filters: { price: null, zone: null, rating: null },
+  filters: { price: null, zone: null, rating: null, when: null, sort: null },
   favorites: loadFavorites(),
   query: '',
 };
@@ -226,6 +228,34 @@ function matchesBudget(e: EventItem, budget: string): boolean {
   return true;
 }
 
+function matchesWhen(e: EventItem, when: string): boolean {
+  if (!e.dateStart) return false;
+  const d = new Date(e.dateStart);
+  const now = new Date();
+  if (d.getTime() < now.getTime()) return false;
+
+  if (when === 'today') {
+    return d.toDateString() === now.toDateString();
+  }
+  if (when === 'week') {
+    return d.getTime() <= now.getTime() + 7 * 24 * 3600 * 1000;
+  }
+  if (when === 'weekend') {
+    const day = now.getDay(); // 0 = dimanche, 6 = samedi
+    const daysUntilSaturday = (6 - day + 7) % 7;
+    const saturday = new Date(now);
+    saturday.setHours(0, 0, 0, 0);
+    saturday.setDate(now.getDate() + daysUntilSaturday);
+    const mondayAfter = new Date(saturday);
+    mondayAfter.setDate(saturday.getDate() + 2);
+    return d.getTime() >= saturday.getTime() && d.getTime() < mondayAfter.getTime();
+  }
+  if (when === 'month') {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+  return true;
+}
+
 function matchesFilters(e: EventItem): boolean {
   if (state.cat !== 'all' && e.category !== state.cat) return false;
   if (state.query) {
@@ -239,6 +269,8 @@ function matchesFilters(e: EventItem): boolean {
   if (f.price === 'high' && !(e.price > 40)) return false;
   if (f.zone && e.zone !== f.zone) return false;
   if (f.rating && (!e.rating || e.rating < parseFloat(f.rating))) return false;
+  if (f.when && !matchesWhen(e, f.when)) return false;
+  if (f.sort === 'topRated' && (!e.reviewsCount || e.reviewsCount < 10)) return false;
   return true;
 }
 
@@ -290,7 +322,11 @@ function renderExplorer() {
   $('chip-row').innerHTML = CATS.map(
     (c) => `<div class="chip ${state.cat === c.v ? 'active' : ''}" data-cat="${c.v}">${c.l}</div>`
   ).join('');
+  document
+    .querySelectorAll<HTMLElement>('#when-row [data-when]')
+    .forEach((el) => el.classList.toggle('active', state.filters.when === el.dataset.when));
   const list = state.events.filter(matchesFilters);
+  if (state.filters.sort === 'topRated') list.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
   renderCardList('explorer-list', list);
   $('explorer-empty').hidden = list.length > 0;
   const count = Object.values(state.filters).filter(Boolean).length;
@@ -591,6 +627,14 @@ document.addEventListener('click', (ev) => {
   const openEl = target.closest<HTMLElement>('[data-open]');
   if (openEl) {
     openDetail(openEl.dataset.open!);
+    return;
+  }
+
+  const whenChip = target.closest<HTMLElement>('[data-when]');
+  if (whenChip) {
+    state.filters.when = state.filters.when === whenChip.dataset.when ? null : whenChip.dataset.when!;
+    listPageSize.delete('explorer-list');
+    renderExplorer();
     return;
   }
 

@@ -91,7 +91,7 @@ body{
 .field label{display:block;font-size:0.76rem;color:var(--ink-soft);margin-bottom:5px;}
 .field input{
   width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line-strong);
-  background:var(--surface-2);color:var(--ink);font-family:var(--body);font-size:0.88rem;
+  background:var(--surface-2);color:var(--ink);font-family:var(--body);font-size:16px;
 }
 .field input:focus{outline:2px solid var(--amber);outline-offset:1px;}
 .form-actions{display:flex;gap:8px;margin-top:16px;}
@@ -187,7 +187,7 @@ body{
   display:flex;gap:8px;align-items:center;background:var(--surface-2);border:1px solid var(--line);
   border-radius:12px;padding:10px 12px;margin:14px 0 4px;
 }
-.search-row input{border:none;background:none;outline:none;flex:1;color:var(--ink);font-family:var(--body);font-size:0.85rem;}
+.search-row input{border:none;background:none;outline:none;flex:1;color:var(--ink);font-family:var(--body);font-size:16px;}
 .search-row input::placeholder{color:var(--ink-faint);}
 .search-row svg{width:15px;height:15px;stroke:var(--ink-faint);fill:none;stroke-width:2;flex-shrink:0;}
 
