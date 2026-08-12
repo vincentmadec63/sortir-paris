@@ -4,6 +4,10 @@ create table public.preferences (
   favorite_categories text[] default '{}',
   home_zone text,
   favorite_event_ids text[] default '{}',
+  age_range text,
+  humor_types text[] default '{}',
+  show_types text[] default '{}',
+  kyc_completed boolean default false,
   updated_at timestamptz default now()
 );
 

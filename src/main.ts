@@ -5,19 +5,27 @@ import { CATEGORY_LABELS } from './types';
 import { setupMap, type MapController } from './map';
 import {
   isAuthConfigured,
+  getSession,
   onAuthStateChange,
   signIn,
   signUp,
+  signInWithGoogle,
   signOut,
   loadPreferences,
   savePreferences,
+  EMPTY_PREFS,
   type Preferences,
 } from './auth';
 import type { Session } from '@supabase/supabase-js';
 
 registerSW({ immediate: true });
 
-const EMPTY_PREFS: Preferences = { favoriteCategories: [], homeZone: null, favoriteEventIds: [] };
+const WELCOME_SEEN_KEY = 'sortir-paris:welcome-seen';
+
+const AGE_RANGES = ['13-17', '18-24', '25-34', '35-44', '45-54', '55+'];
+const HUMOR_TYPES = ['Absurde', 'Observationnel', 'Noir', 'Satire politique', 'Impro', 'Autodérision'];
+const SHOW_TYPES = ['Comédie', 'Drame', 'Classique', 'Contemporain', 'Musical', 'Cirque', 'Danse'];
+
 let currentSession: Session | null = null;
 let currentPrefs: Preferences = EMPTY_PREFS;
 
@@ -164,6 +172,16 @@ function isThisWeek(iso: string): boolean {
   return d >= now && d <= now + 7 * 24 * 3600 * 1000;
 }
 
+// Boost léger (pas un filtre dur) : les données scrapées n'ont pas de
+// sous-genre structuré, donc on fait une correspondance de mots-clés dans
+// le titre/description plutôt qu'un vrai filtrage précis.
+function kycBoost(e: EventItem): number {
+  if (!currentSession) return 0;
+  const haystack = `${e.title} ${e.description ?? ''}`.toLowerCase();
+  const terms = [...currentPrefs.humorTypes, ...currentPrefs.showTypes];
+  return terms.reduce((score, term) => (haystack.includes(term.toLowerCase()) ? score + 1 : score), 0);
+}
+
 function matchesFilters(e: EventItem): boolean {
   if (state.cat !== 'all' && e.category !== state.cat) return false;
   if (state.query) {
@@ -202,7 +220,10 @@ function renderAll() {
     );
     if (preferred.length > 0) upcoming = preferred;
   }
-  upcoming = upcoming.sort((a, b) => a.dateStart.localeCompare(b.dateStart)).slice(0, 8);
+  upcoming = upcoming
+    .sort((a, b) => a.dateStart.localeCompare(b.dateStart))
+    .sort((a, b) => kycBoost(b) - kycBoost(a))
+    .slice(0, 8);
   $('screen-accueil').querySelector('.screen-sub')!.textContent = hasPrefs
     ? 'Sélection selon tes préférences.'
     : "Voici ce qu'il ne faut pas rater cette semaine.";
@@ -267,43 +288,35 @@ function openSheet(id: string) {
 function closeSheets() {
   $('backdrop').classList.remove('open');
   document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('open'));
+  localStorage.setItem(WELCOME_SEEN_KEY, '1');
 }
 
 function updateAccountButton() {
   $('open-account').classList.toggle('logged-in', Boolean(currentSession));
 }
 
-function renderAccountSheet(error?: string) {
-  const el = $('account-content');
+let accountView: 'prefs' | 'kyc' = 'prefs';
 
-  if (!isAuthConfigured) {
-    el.innerHTML = `
-      <h3 class="sheet-heading">Compte</h3>
-      <p class="form-note">La connexion n'est pas encore activée sur cette installation. En attendant, tes favoris restent enregistrés sur cet appareil.</p>
-    `;
-    return;
-  }
+function chipGroup(id: string, options: string[], selected: string[], dataAttr: string): string {
+  return `<div class="filter-options" id="${id}">
+    ${options
+      .map((o) => `<div class="filter-opt ${selected.includes(o) ? 'sel' : ''}" data-${dataAttr}="${escapeHTML(o)}">${escapeHTML(o)}</div>`)
+      .join('')}
+  </div>`;
+}
 
-  if (!currentSession) {
-    el.innerHTML = `
-      <h3 class="sheet-heading">Compte</h3>
-      <div class="field"><label>Email</label><input type="email" id="account-email-input" autocomplete="email" /></div>
-      <div class="field"><label>Mot de passe</label><input type="password" id="account-password-input" autocomplete="current-password" /></div>
-      <div class="form-actions">
-        <button class="btn" id="account-signup">Créer un compte</button>
-        <button class="btn primary" id="account-signin">Se connecter</button>
-      </div>
-      ${error ? `<div class="form-error">${escapeHTML(error)}</div>` : ''}
-      <p class="form-note">Une fois connecté, tes catégories préférées et ta zone "chez moi" s'appliquent automatiquement à l'ouverture, sur tous tes appareils.</p>
-    `;
-    return;
-  }
-
-  el.innerHTML = `
-    <h3 class="sheet-heading">Compte</h3>
-    <div class="account-email">${escapeHTML(currentSession.user.email ?? '')}</div>
+function kycFormHTML(): string {
+  const wantsStandup = currentPrefs.favoriteCategories.includes('standup');
+  const wantsTheatre = currentPrefs.favoriteCategories.includes('theatre');
+  return `
+    <h3 class="sheet-heading">Personnalise tes recommandations</h3>
+    <p class="form-note">Ces infos nous aident à te proposer les bonnes sorties en priorité. Modifiable à tout moment.</p>
     <div class="filter-group">
-      <h4>Tes catégories préférées</h4>
+      <h4>Ton âge</h4>
+      ${chipGroup('kyc-age', AGE_RANGES, currentPrefs.ageRange ? [currentPrefs.ageRange] : [], 'kyc-age')}
+    </div>
+    <div class="filter-group">
+      <h4>Centres d'intérêt</h4>
       <div class="filter-options" id="pref-categories">
         ${CATS.filter((c) => c.v !== 'all')
           .map(
@@ -313,6 +326,16 @@ function renderAccountSheet(error?: string) {
           .join('')}
       </div>
     </div>
+    ${
+      wantsStandup
+        ? `<div class="filter-group"><h4>Type d'humour préféré</h4>${chipGroup('kyc-humor', HUMOR_TYPES, currentPrefs.humorTypes, 'kyc-humor')}</div>`
+        : ''
+    }
+    ${
+      wantsTheatre
+        ? `<div class="filter-group"><h4>Type de spectacle préféré</h4>${chipGroup('kyc-show', SHOW_TYPES, currentPrefs.showTypes, 'kyc-show')}</div>`
+        : ''
+    }
     <div class="filter-group">
       <h4>Zone "chez moi"</h4>
       <div class="filter-options" id="pref-zone">
@@ -322,7 +345,62 @@ function renderAccountSheet(error?: string) {
       </div>
     </div>
     <div class="form-actions">
-      <button class="btn primary" id="account-save-prefs">Enregistrer</button>
+      <button class="btn primary" id="account-save-kyc">${currentPrefs.kycCompleted ? 'Enregistrer' : 'Terminer mon profil'}</button>
+    </div>
+  `;
+}
+
+function renderAccountSheet(error?: string) {
+  const el = $('account-content');
+  const isFirstRun = !localStorage.getItem(WELCOME_SEEN_KEY) && !currentSession;
+
+  if (!isAuthConfigured) {
+    el.innerHTML = `
+      <h3 class="sheet-heading">Compte</h3>
+      <p class="form-note">La connexion n'est pas encore activée sur cette installation. En attendant, tes favoris restent enregistrés sur cet appareil.</p>
+      <div class="form-actions">
+        <button class="btn primary" id="account-continue-guest">Continuer sans compte</button>
+      </div>
+    `;
+    return;
+  }
+
+  if (!currentSession) {
+    el.innerHTML = `
+      <h3 class="sheet-heading">${isFirstRun ? 'Bienvenue' : 'Compte'}</h3>
+      ${isFirstRun ? '<p class="form-note">Connecte-toi pour retrouver tes préférences sur tous tes appareils — ou continue sans compte, tu pourras le faire plus tard.</p>' : ''}
+      <div class="form-actions">
+        <button class="btn google" id="account-google">
+          <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.6 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.1-2.5-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-2.1 14.1-5.5l-6.5-5.5c-2.1 1.6-4.9 2.6-7.6 2.6-5.2 0-9.7-3.1-11.3-7.9l-6.6 5.1C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.8l6.5 5.5C41.5 36.5 44 30.8 44 24c0-1.4-.1-2.5-.4-3.5z"/></svg>
+          Continuer avec Google
+        </button>
+      </div>
+      <p class="form-divider">ou</p>
+      <div class="field"><label>Email</label><input type="email" id="account-email-input" autocomplete="email" /></div>
+      <div class="field"><label>Mot de passe</label><input type="password" id="account-password-input" autocomplete="current-password" /></div>
+      <div class="form-actions">
+        <button class="btn" id="account-signup">Créer un compte</button>
+        <button class="btn primary" id="account-signin">Se connecter</button>
+      </div>
+      ${error ? `<div class="form-error">${escapeHTML(error)}</div>` : ''}
+      <p class="form-note">Une fois connecté, tes préférences s'appliquent automatiquement à l'ouverture, sur tous tes appareils.</p>
+      <div class="form-actions">
+        <button class="btn" id="account-continue-guest">Continuer sans compte</button>
+      </div>
+    `;
+    return;
+  }
+
+  if (!currentPrefs.kycCompleted || accountView === 'kyc') {
+    el.innerHTML = kycFormHTML() + (error ? `<div class="form-error">${escapeHTML(error)}</div>` : '');
+    return;
+  }
+
+  el.innerHTML = `
+    <h3 class="sheet-heading">Compte</h3>
+    <div class="account-email">${escapeHTML(currentSession.user.email ?? '')}</div>
+    <div class="form-actions">
+      <button class="btn" id="account-edit-profile">Modifier mon profil</button>
     </div>
     <div class="form-actions">
       <button class="btn danger" id="account-signout">Se déconnecter</button>
@@ -387,15 +465,20 @@ async function handleSignUp() {
   );
 }
 
-async function handleSavePrefs() {
+async function handleSaveKyc() {
   if (!currentSession) return;
   const favoriteCategories = [...document.querySelectorAll<HTMLElement>('#pref-categories .sel')].map(
     (el) => el.dataset.prefCat as Category
   );
   const homeZoneEl = document.querySelector<HTMLElement>('#pref-zone .sel');
   const homeZone = (homeZoneEl?.dataset.prefZone as Zone | undefined) ?? null;
-  currentPrefs = { ...currentPrefs, favoriteCategories, homeZone };
+  const ageEl = document.querySelector<HTMLElement>('#kyc-age .sel');
+  const ageRange = ageEl?.dataset.kycAge ?? null;
+  const humorTypes = [...document.querySelectorAll<HTMLElement>('#kyc-humor .sel')].map((el) => el.dataset.kycHumor!);
+  const showTypes = [...document.querySelectorAll<HTMLElement>('#kyc-show .sel')].map((el) => el.dataset.kycShow!);
+  currentPrefs = { ...currentPrefs, favoriteCategories, homeZone, ageRange, humorTypes, showTypes, kycCompleted: true };
   await savePreferences(currentSession.user.id, currentPrefs);
+  accountView = 'prefs';
   renderAll();
   closeSheets();
 }
@@ -474,6 +557,36 @@ document.addEventListener('click', (ev) => {
     prefZone.classList.add('sel');
     return;
   }
+  const kycAge = target.closest<HTMLElement>('[data-kyc-age]');
+  if (kycAge) {
+    kycAge.parentElement!.querySelectorAll('[data-kyc-age]').forEach((o) => o.classList.remove('sel'));
+    kycAge.classList.add('sel');
+    return;
+  }
+  const kycHumor = target.closest<HTMLElement>('[data-kyc-humor]');
+  if (kycHumor) {
+    kycHumor.classList.toggle('sel');
+    return;
+  }
+  const kycShow = target.closest<HTMLElement>('[data-kyc-show]');
+  if (kycShow) {
+    kycShow.classList.toggle('sel');
+    return;
+  }
+  if (target.closest('#account-google')) {
+    void signInWithGoogle();
+    return;
+  }
+  if (target.closest('#account-continue-guest')) {
+    localStorage.setItem(WELCOME_SEEN_KEY, '1');
+    closeSheets();
+    return;
+  }
+  if (target.closest('#account-edit-profile')) {
+    accountView = 'kyc';
+    renderAccountSheet();
+    return;
+  }
   if (target.closest('#account-signin')) {
     void handleSignIn();
     return;
@@ -487,8 +600,8 @@ document.addEventListener('click', (ev) => {
     closeSheets();
     return;
   }
-  if (target.closest('#account-save-prefs')) {
-    void handleSavePrefs();
+  if (target.closest('#account-save-kyc')) {
+    void handleSaveKyc();
     return;
   }
 
@@ -534,5 +647,17 @@ onAuthStateChange(async (session) => {
   renderAll();
 });
 
+async function maybeShowWelcome() {
+  if (localStorage.getItem(WELCOME_SEEN_KEY)) return;
+  const session = await getSession();
+  if (session) {
+    localStorage.setItem(WELCOME_SEEN_KEY, '1');
+    return;
+  }
+  renderAccountSheet();
+  openSheet('account-sheet');
+}
+
 setGreeting();
 loadEvents();
+void maybeShowWelcome();

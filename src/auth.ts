@@ -5,9 +5,21 @@ export interface Preferences {
   favoriteCategories: Category[];
   homeZone: Zone | null;
   favoriteEventIds: string[];
+  ageRange: string | null;
+  humorTypes: string[];
+  showTypes: string[];
+  kycCompleted: boolean;
 }
 
-const EMPTY_PREFS: Preferences = { favoriteCategories: [], homeZone: null, favoriteEventIds: [] };
+export const EMPTY_PREFS: Preferences = {
+  favoriteCategories: [],
+  homeZone: null,
+  favoriteEventIds: [],
+  ageRange: null,
+  humorTypes: [],
+  showTypes: [],
+  kycCompleted: false,
+};
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -40,6 +52,15 @@ export async function signIn(email: string, password: string): Promise<string | 
   return error?.message ?? null;
 }
 
+export async function signInWithGoogle(): Promise<string | null> {
+  if (!client) return "Comptes non configurés pour l'instant.";
+  const { error } = await client.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href },
+  });
+  return error?.message ?? null;
+}
+
 export async function signOut(): Promise<void> {
   await client?.auth.signOut();
 }
@@ -48,7 +69,7 @@ export async function loadPreferences(userId: string): Promise<Preferences> {
   if (!client) return EMPTY_PREFS;
   const { data, error } = await client
     .from('preferences')
-    .select('favorite_categories, home_zone, favorite_event_ids')
+    .select('favorite_categories, home_zone, favorite_event_ids, age_range, humor_types, show_types, kyc_completed')
     .eq('user_id', userId)
     .maybeSingle();
   if (error || !data) return EMPTY_PREFS;
@@ -56,6 +77,10 @@ export async function loadPreferences(userId: string): Promise<Preferences> {
     favoriteCategories: (data.favorite_categories ?? []) as Category[],
     homeZone: (data.home_zone ?? null) as Zone | null,
     favoriteEventIds: (data.favorite_event_ids ?? []) as string[],
+    ageRange: (data.age_range ?? null) as string | null,
+    humorTypes: (data.humor_types ?? []) as string[],
+    showTypes: (data.show_types ?? []) as string[],
+    kycCompleted: Boolean(data.kyc_completed),
   };
 }
 
@@ -66,6 +91,10 @@ export async function savePreferences(userId: string, prefs: Preferences): Promi
     favorite_categories: prefs.favoriteCategories,
     home_zone: prefs.homeZone,
     favorite_event_ids: prefs.favoriteEventIds,
+    age_range: prefs.ageRange,
+    humor_types: prefs.humorTypes,
+    show_types: prefs.showTypes,
+    kyc_completed: prefs.kycCompleted,
     updated_at: new Date().toISOString(),
   });
   return error?.message ?? null;
