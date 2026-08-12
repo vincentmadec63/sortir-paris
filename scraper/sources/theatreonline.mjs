@@ -15,11 +15,11 @@ const OUT_FILE = path.join(__dirname, '..', '.cache', 'theatreonline.json');
 
 const BASE = 'https://www.theatreonline.com';
 const GENRE_PAGES = [
-  { slug: 'genre/comedie-boulevard/1', category: 'theatre' },
-  { slug: 'genre/contemporain/2', category: 'theatre' },
-  { slug: 'genre/classique/3', category: 'theatre' },
-  { slug: 'genre/musique-danse/4', category: 'concert' },
-  { slug: 'genre/humour-cafe-theatre/5', category: 'standup' },
+  { slug: 'genre/comedie-boulevard/1', category: 'theatre', label: 'Comédie & Boulevard' },
+  { slug: 'genre/contemporain/2', category: 'theatre', label: 'Contemporain' },
+  { slug: 'genre/classique/3', category: 'theatre', label: 'Classique' },
+  { slug: 'genre/musique-danse/4', category: 'concert', label: 'Musique & Danse' },
+  { slug: 'genre/humour-cafe-theatre/5', category: 'standup', label: 'Humour & Café-théâtre' },
 ];
 const MAX_PAGES_PER_GENRE = 4; // ~120 fiches/genre max
 const PAGE_DELAY_MS = 300;
@@ -61,8 +61,8 @@ async function listGenrePage(slug, page) {
 }
 
 async function collectListingUrls() {
-  const urlToCategory = new Map();
-  for (const { slug, category } of GENRE_PAGES) {
+  const urlToGenre = new Map(); // url -> { category, label }
+  for (const { slug, category, label } of GENRE_PAGES) {
     let page = 1;
     let total = 0;
     while (page <= MAX_PAGES_PER_GENRE) {
@@ -70,7 +70,7 @@ async function collectListingUrls() {
       if (links.length === 0) break;
       for (const href of links) {
         const url = `${BASE}${href}`;
-        if (!urlToCategory.has(url)) urlToCategory.set(url, category);
+        if (!urlToGenre.has(url)) urlToGenre.set(url, { category, label });
       }
       total += links.length;
       page += 1;
@@ -78,7 +78,7 @@ async function collectListingUrls() {
     }
     console.log(`  ${slug}: ${total} fiches listées sur ${page - 1} page(s)`);
   }
-  return urlToCategory;
+  return urlToGenre;
 }
 
 function extractId(url) {
@@ -86,7 +86,7 @@ function extractId(url) {
   return seg || url;
 }
 
-async function fetchEventDetail(url, category, highlightVia) {
+async function fetchEventDetail(url, category, genreLabel, highlightVia) {
   const html = await fetchText(url);
   const $ = load(html);
   const ev = findScopes($, $.root(), 'Event').first();
@@ -155,21 +155,23 @@ async function fetchEventDetail(url, category, highlightVia) {
     verifiedVia: undefined,
     highlighted: Boolean(highlightVia),
     highlightedVia: highlightVia,
+    tags: genreLabel ? [genreLabel] : [],
   };
 }
 
 async function main() {
   console.log('Listing des genres TheaterOnline…');
-  const urlToCategory = await collectListingUrls();
-  const urls = [...urlToCategory.keys()];
+  const urlToGenre = await collectListingUrls();
+  const urls = [...urlToGenre.keys()];
   console.log(`${urls.length} fiches uniques à détailler…`);
 
   console.log('Listing des pages éditoriales (coups de cœur / succès)…');
   const highlights = await collectHighlightUrls();
 
-  const results = await mapLimit(urls, DETAIL_CONCURRENCY, (url) =>
-    fetchEventDetail(url, urlToCategory.get(url), highlights.get(url))
-  );
+  const results = await mapLimit(urls, DETAIL_CONCURRENCY, (url) => {
+    const genre = urlToGenre.get(url);
+    return fetchEventDetail(url, genre?.category, genre?.label, highlights.get(url));
+  });
   const events = results.filter(Boolean);
 
   await mkdir(path.dirname(OUT_FILE), { recursive: true });

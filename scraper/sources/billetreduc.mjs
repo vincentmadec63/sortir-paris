@@ -59,6 +59,17 @@ function extractId(url) {
   return seg || url;
 }
 
+// Le breadcrumb JSON-LD suit toujours [Site, Ville, Catégorie, Sous-genre,
+// Titre-de-la-fiche] : l'avant-dernier élément est le vrai sous-genre du
+// site (ex. "Meufs drôles"), qu'on ne devine pas nous-mêmes.
+function subgenreFromBreadcrumb(blocks) {
+  const bc = findByType(blocks, 'BreadcrumbList');
+  const items = bc?.itemListElement;
+  if (!Array.isArray(items) || items.length < 4) return [];
+  const subgenre = items[items.length - 2]?.name;
+  return subgenre ? [subgenre] : [];
+}
+
 function priceFromOffers(offers) {
   const list = Array.isArray(offers) ? offers : offers ? [offers] : [];
   const prices = list.map((o) => Number(o.price)).filter((p) => Number.isFinite(p));
@@ -90,6 +101,7 @@ async function fetchEventDetail(url, category) {
   const rating = ev.aggregateRating
     ? (Number(ev.aggregateRating.ratingValue) / Number(ev.aggregateRating.bestRating || 10)) * 5
     : undefined;
+  const tags = subgenreFromBreadcrumb(blocks);
 
   return {
     id: `billetreduc:${extractId(url)}`,
@@ -116,6 +128,7 @@ async function fetchEventDetail(url, category) {
     verified: false,
     verifiedVia: undefined,
     highlighted: false,
+    tags,
   };
 }
 

@@ -27,6 +27,7 @@ export interface EventItem {
   verifiedVia?: string;
   highlighted: boolean;
   highlightedVia?: string;
+  tags: string[];
 }
 
 export interface EventsFile {

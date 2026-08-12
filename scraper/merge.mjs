@@ -56,6 +56,10 @@ function dedupeEvents(events) {
       winner.highlighted = true;
       winner.highlightedVia = loser.highlightedVia;
     }
+    // Même logique pour les sous-genres : deux sources peuvent chacune
+    // apporter un tag différent et pertinent pour le même spectacle.
+    const mergedTags = new Set([...(winner.tags ?? []), ...(loser.tags ?? [])]);
+    winner.tags = [...mergedTags];
     byKey.set(key, winner);
   }
   return [...byKey.values()];

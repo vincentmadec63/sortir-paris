@@ -85,6 +85,7 @@ function toEventItem(record) {
     verified: category === 'ephemere',
     verifiedVia: category === 'ephemere' ? 'OpenAgenda (données publiques)' : undefined,
     highlighted: false,
+    tags: [],
   };
 }
 

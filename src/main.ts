@@ -48,12 +48,14 @@ interface Filters {
 const state: {
   events: EventItem[];
   cat: Category | 'all';
+  tag: string | null;
   filters: Filters;
   favorites: Set<string>;
   query: string;
 } = {
   events: [],
   cat: 'all',
+  tag: null,
   filters: { price: null, zone: null, rating: null, when: null, sort: null, highlight: null },
   favorites: loadFavorites(),
   query: '',
@@ -137,6 +139,12 @@ function heroCardHTML(e: EventItem): string {
   </div>`;
 }
 
+function subgenreLabel(e: EventItem): string {
+  const tag = e.tags?.[0];
+  if (!tag || tag === CATEGORY_LABELS[e.category]) return '';
+  return ` · ${escapeHTML(tag)}`;
+}
+
 function cardHTML(e: EventItem): string {
   return `<div class="card cat-${e.category}" data-open="${e.id}">
     ${heart(e.id, state.favorites.has(e.id))}
@@ -144,7 +152,7 @@ function cardHTML(e: EventItem): string {
     <div class="card-body">
       <div class="card-top">
         <div>
-          <div class="card-cat">${CATEGORY_LABELS[e.category]}${e.highlighted ? ' · <span class="highlight-badge">★ Coup de cœur</span>' : ''}</div>
+          <div class="card-cat">${CATEGORY_LABELS[e.category]}${subgenreLabel(e)}${e.highlighted ? ' · <span class="highlight-badge">★ Coup de cœur</span>' : ''}</div>
           <div class="card-title">${escapeHTML(e.title)}</div>
         </div>
       </div>
@@ -217,6 +225,7 @@ function matchesWhen(e: EventItem, when: string): boolean {
 
 function matchesFilters(e: EventItem): boolean {
   if (state.cat !== 'all' && e.category !== state.cat) return false;
+  if (state.tag && !e.tags?.includes(state.tag)) return false;
   if (state.query) {
     const q = state.query.toLowerCase();
     if (!e.title.toLowerCase().includes(q) && !e.venue.toLowerCase().includes(q)) return false;
@@ -273,10 +282,33 @@ function renderAll() {
   renderFavoris();
 }
 
+function renderTagRow() {
+  const tagRow = $('tag-row');
+  const counts = new Map<string, number>();
+  for (const e of state.events) {
+    if (state.cat !== 'all' && e.category !== state.cat) continue;
+    for (const t of e.tags ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  const tags = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([t]) => t);
+  if (state.cat === 'all' || tags.length === 0) {
+    tagRow.hidden = true;
+    tagRow.innerHTML = '';
+    return;
+  }
+  tagRow.hidden = false;
+  tagRow.innerHTML = tags
+    .map((t) => `<div class="chip ${state.tag === t ? 'active' : ''}" data-tag="${escapeHTML(t)}">${escapeHTML(t)}</div>`)
+    .join('');
+}
+
 function renderExplorer() {
   $('chip-row').innerHTML = CATS.map(
     (c) => `<div class="chip ${state.cat === c.v ? 'active' : ''}" data-cat="${c.v}">${c.l}</div>`
   ).join('');
+  renderTagRow();
   document
     .querySelectorAll<HTMLElement>('#when-row [data-when]')
     .forEach((el) => el.classList.toggle('active', state.filters.when === el.dataset.when));
@@ -299,7 +331,7 @@ function openDetail(id: string) {
   if (!e) return;
   $('detail-content').innerHTML = `
     <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" decoding="async" />
-    <div class="detail-cat">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
+    <div class="detail-cat">${CATEGORY_LABELS[e.category]}${subgenreLabel(e)}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
     ${e.highlighted ? `<div class="highlight-badge" style="margin:6px 0 0;">★ ${escapeHTML(e.highlightedVia ?? 'Coup de cœur')}</div>` : ''}
     <div class="detail-title">${escapeHTML(e.title)}</div>
     <div class="detail-meta-row">
@@ -532,9 +564,18 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
+  const tagChip = target.closest<HTMLElement>('[data-tag]');
+  if (tagChip) {
+    state.tag = state.tag === tagChip.dataset.tag ? null : tagChip.dataset.tag!;
+    listPageSize.delete('explorer-list');
+    renderExplorer();
+    return;
+  }
+
   const chip = target.closest<HTMLElement>('.chip');
   if (chip) {
     state.cat = chip.dataset.cat as Category | 'all';
+    state.tag = null;
     listPageSize.delete('explorer-list');
     renderExplorer();
     return;
