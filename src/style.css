@@ -201,6 +201,15 @@ body{
 
 .verified{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:0.62rem;color:var(--amber-dim);margin-top:4px;}
 .highlight-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:0.62rem;letter-spacing:0.02em;color:var(--amber);font-weight:700;text-transform:none;}
+.distance{font-family:var(--mono);font-size:0.72rem;color:var(--ink-soft);}
+
+.near-row{display:flex;align-items:center;gap:10px;margin:2px 0 10px;flex-wrap:wrap;}
+.near-btn{
+  font-family:var(--body);font-size:0.78rem;padding:7px 14px;border-radius:100px;
+  border:1px solid var(--line-strong);background:none;color:var(--ink-soft);cursor:pointer;
+}
+.near-btn.active{background:var(--amber);border-color:var(--amber);color:#1A1420;font-weight:600;}
+.near-status{font-size:0.72rem;color:var(--ink-faint);}
 
 .leaflet-map{
   height:min(360px,50vh);

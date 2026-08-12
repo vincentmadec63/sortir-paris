@@ -24,6 +24,9 @@
         <div class="screen-title" id="greeting">Bonjour.</div>
         <p class="screen-sub">Voici ce qu'il ne faut pas rater cette semaine.</p>
 
+        <div class="section-label" id="tonight-label" hidden>CE SOIR</div>
+        <div id="tonight-list"></div>
+
         <div class="section-label">NOUVEAU CETTE SEMAINE</div>
         <div class="hero-rail" id="hero-rail"></div>
 
@@ -37,6 +40,10 @@
         <div class="search-row">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           <input id="search-input" placeholder="Un spectacle, une salle, un quartier…" />
+        </div>
+        <div class="near-row">
+          <button class="near-btn" id="near-me-btn">📍 Trier par distance</button>
+          <span class="near-status" id="near-status" hidden></span>
         </div>
         <div class="chip-row" id="chip-row"></div>
         <div class="chip-row" id="tag-row" hidden></div>
@@ -69,6 +76,7 @@
       <div class="screen" id="screen-favoris" hidden>
         <div class="screen-title">Favoris</div>
         <p class="screen-sub">Enregistrés sur cet appareil — sans compte.</p>
+        <button class="btn" id="share-favorites" hidden>Partager ma sélection</button>
         <div id="favoris-list"></div>
         <div class="empty-state" id="favoris-empty">Touchez le cœur sur une sortie pour la retrouver ici.</div>
       </div>
@@ -88,6 +96,13 @@
       <div class="sheet-grip"></div>
       <button class="sheet-close" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-scroll" id="account-content"></div>
+    </div>
+
+    <!-- SELECTION SHEET (favoris partagés) -->
+    <div class="sheet" id="selection-sheet">
+      <div class="sheet-grip"></div>
+      <button class="sheet-close" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="sheet-scroll" id="selection-content"></div>
     </div>
 
     <!-- FILTER SHEET -->

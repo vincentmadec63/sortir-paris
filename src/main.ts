@@ -84,6 +84,8 @@ const state: {
   favorites: Set<string>;
   query: string;
   mapCat: Category | 'all';
+  nearMe: boolean;
+  userLocation: { lat: number; lng: number } | null;
 } = {
   events: [],
   cat: 'all',
@@ -92,6 +94,8 @@ const state: {
   favorites: loadFavorites(),
   query: '',
   mapCat: 'all',
+  nearMe: false,
+  userLocation: null,
 };
 
 function loadFavorites(): Set<string> {
@@ -150,6 +154,26 @@ function starsSvg(): string {
 
 function heart(id: string, active: boolean): string {
   return `<div class="heart ${active ? 'active' : ''}" data-heart="${id}"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg></div>`;
+}
+
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function formatDistance(km: number): string {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1).replace('.', ',')} km`;
+}
+
+function distanceLabel(e: EventItem): string {
+  if (!state.nearMe || !state.userLocation) return '';
+  const km = distanceKm(state.userLocation.lat, state.userLocation.lng, e.lat, e.lng);
+  return `<span class="dot"></span><span class="distance">📍 ${formatDistance(km)}</span>`;
 }
 
 function formatDate(iso: string): string {
@@ -226,6 +250,7 @@ function cardHTML(e: EventItem): string {
         <span class="price">${escapeHTML(e.priceLabel)}</span><span class="dot"></span>
         ${ratingHTML(e)}
         ${e.verified ? `<span class="dot"></span><span class="verified">vérifié · ${escapeHTML(e.verifiedVia ?? e.sourceName)}</span>` : ''}
+        ${distanceLabel(e)}
       </div>
     </div>
   </div>`;
@@ -288,6 +313,18 @@ function matchesWhen(e: EventItem, when: string): boolean {
   return true;
 }
 
+// "Ce soir" réutilise exactement la logique du filtre "Aujourd'hui" (même
+// date + horaire pas encore passé) : dateStart correspond parfois au début
+// d'une période de représentation plutôt qu'à la séance du jour, donc les
+// spectacles à programmation continue peuvent ne pas apparaître ici — c'est
+// une limitation déjà connue du filtre "Aujourd'hui", pas une régression.
+function tonightEvents(): EventItem[] {
+  return state.events
+    .filter((e) => matchesWhen(e, 'today'))
+    .sort((a, b) => a.dateStart.localeCompare(b.dateStart))
+    .slice(0, 8);
+}
+
 function matchesFilters(e: EventItem): boolean {
   if (state.cat !== 'all' && e.category !== state.cat) return false;
   if (state.tag && !e.tags?.includes(state.tag)) return false;
@@ -315,6 +352,10 @@ function $(id: string): HTMLElement {
 }
 
 function renderAll() {
+  const tonight = tonightEvents();
+  $('tonight-label').hidden = tonight.length === 0;
+  $('tonight-list').innerHTML = tonight.map(cardHTML).join('');
+
   const news = state.events.filter((e) => e.isNew).slice(0, 10);
   $('hero-rail').innerHTML = news.length
     ? news.map(heroCardHTML).join('')
@@ -368,16 +409,59 @@ function renderTagRow() {
     .join('');
 }
 
+function setNearStatus(msg: string | null) {
+  const el = $('near-status');
+  el.hidden = !msg;
+  el.textContent = msg ?? '';
+}
+
+// Le tri par distance prend le pas sur "Mieux notés" quand actif : les deux
+// tris n'ont pas grand sens combinés, et "près de moi" est une intention
+// plus explicite (l'utilisateur vient de donner sa position) qu'un filtre
+// resté coché dans la feuille de filtres.
+function toggleNearMe() {
+  if (state.nearMe) {
+    state.nearMe = false;
+    setNearStatus(null);
+    listPageSize.delete('explorer-list');
+    renderExplorer();
+    return;
+  }
+  if (!navigator.geolocation) {
+    setNearStatus('Géolocalisation non disponible sur cet appareil.');
+    return;
+  }
+  setNearStatus('Localisation en cours…');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      state.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      state.nearMe = true;
+      setNearStatus(null);
+      listPageSize.delete('explorer-list');
+      renderExplorer();
+    },
+    () => {
+      setNearStatus("Position indisponible — vérifie l'autorisation de localisation.");
+    },
+    { enableHighAccuracy: false, timeout: 8000 }
+  );
+}
+
 function renderExplorer() {
   $('chip-row').innerHTML = CATS.map(
     (c) => `<div class="chip ${state.cat === c.v ? 'active' : ''}" data-cat="${c.v}">${c.l}</div>`
   ).join('');
   renderTagRow();
+  $('near-me-btn').classList.toggle('active', state.nearMe);
   document
     .querySelectorAll<HTMLElement>('#when-row [data-when]')
     .forEach((el) => el.classList.toggle('active', state.filters.when === el.dataset.when));
   const list = state.events.filter(matchesFilters);
   if (state.filters.sort === 'topRated') list.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  if (state.nearMe && state.userLocation) {
+    const loc = state.userLocation;
+    list.sort((a, b) => distanceKm(loc.lat, loc.lng, a.lat, a.lng) - distanceKm(loc.lat, loc.lng, b.lat, b.lng));
+  }
   renderCardList('explorer-list', list);
   $('explorer-empty').hidden = list.length > 0;
   const count = Object.values(state.filters).filter(Boolean).length;
@@ -388,6 +472,7 @@ function renderFavoris() {
   const list = state.events.filter((e) => state.favorites.has(e.id));
   $('favoris-list').innerHTML = list.map(cardHTML).join('');
   $('favoris-empty').hidden = list.length > 0;
+  ($('share-favorites') as HTMLButtonElement).hidden = list.length === 0;
 }
 
 let currentDetailId: string | null = null;
@@ -424,14 +509,10 @@ function openDetail(id: string, opts: { updateUrl?: boolean } = {}) {
   openSheet('detail-sheet');
 }
 
-async function shareCurrentEvent(btn: HTMLElement) {
-  if (!currentDetailId) return;
-  const e = state.events.find((x) => x.id === currentDetailId);
-  if (!e) return;
-  const url = eventUrl(e.id);
+async function shareLink(url: string, title: string, btn: HTMLElement) {
   if (navigator.share) {
     try {
-      await navigator.share({ title: e.title, url });
+      await navigator.share({ title, url });
     } catch {
       // annulé par l'utilisateur — rien à faire
     }
@@ -449,6 +530,46 @@ async function shareCurrentEvent(btn: HTMLElement) {
   }
 }
 
+async function shareCurrentEvent(btn: HTMLElement) {
+  if (!currentDetailId) return;
+  const e = state.events.find((x) => x.id === currentDetailId);
+  if (!e) return;
+  await shareLink(eventUrl(e.id), e.title, btn);
+}
+
+// Partage d'une sélection de favoris : les ids sont encodés en query string
+// (?selection=a,b,c) plutôt qu'en chemin — pas besoin de page statique par
+// combinaison possible (contrairement aux fiches individuelles), et decodage
+// simple côté client via maybeOpenSharedSelection().
+async function shareFavorites(btn: HTMLElement) {
+  if (state.favorites.size === 0) return;
+  const slugs = [...state.favorites].map(slugFromId).join(',');
+  const url = `${window.location.origin}${computeBasePath()}?selection=${encodeURIComponent(slugs)}`;
+  await shareLink(url, `Ma sélection Sortir Paris (${state.favorites.size})`, btn);
+}
+
+let selectionOpen = false;
+
+function openSelection(ids: string[]): boolean {
+  const items = state.events.filter((e) => ids.includes(e.id));
+  if (items.length === 0) return false;
+  selectionOpen = true;
+  $('selection-content').innerHTML = `
+    <h3 class="sheet-heading">Sélection partagée (${items.length})</h3>
+    <p class="form-note">Une sélection de sorties partagée avec toi.</p>
+    ${items.map(cardHTML).join('')}
+  `;
+  openSheet('selection-sheet');
+  return true;
+}
+
+function maybeOpenSharedSelection(): boolean {
+  const raw = new URLSearchParams(window.location.search).get('selection');
+  if (!raw) return false;
+  const ids = raw.split(',').filter(Boolean).map(idFromSlug);
+  return openSelection(ids);
+}
+
 function openSheet(id: string) {
   $('backdrop').classList.add('open');
   $(id).classList.add('open');
@@ -463,6 +584,10 @@ function closeSheets(opts: { updateUrl?: boolean } = {}) {
   if (currentDetailId) {
     currentDetailId = null;
     if (opts.updateUrl !== false) history.pushState({}, '', computeBasePath());
+  }
+  if (selectionOpen) {
+    selectionOpen = false;
+    history.replaceState({}, '', computeBasePath());
   }
 }
 
@@ -712,6 +837,17 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
+  const shareFavBtn = target.closest<HTMLElement>('#share-favorites');
+  if (shareFavBtn) {
+    void shareFavorites(shareFavBtn);
+    return;
+  }
+
+  if (target.closest('#near-me-btn')) {
+    toggleNearMe();
+    return;
+  }
+
   const whenChip = target.closest<HTMLElement>('[data-when]');
   if (whenChip) {
     state.filters.when = state.filters.when === whenChip.dataset.when ? null : whenChip.dataset.when!;
@@ -855,5 +991,6 @@ async function maybeShowWelcome() {
 
 setGreeting();
 void loadEvents().then((routed) => {
-  if (!routed) void maybeShowWelcome();
+  const selectionOpened = maybeOpenSharedSelection();
+  if (!routed && !selectionOpened) void maybeShowWelcome();
 });
