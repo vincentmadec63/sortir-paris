@@ -5,3 +5,5 @@ dev-dist/
 .DS_Store
 *.tsbuildinfo
 scraper/.cache/
+.env
+.env.local

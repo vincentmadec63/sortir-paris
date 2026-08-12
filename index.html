@@ -13,7 +13,9 @@
   <div id="app">
     <header class="topbar">
       <span class="topbar-title">Sortir Paris</span>
-      <span class="topbar-zone">Paris · Île-de-France</span>
+      <button class="account-btn" id="open-account" aria-label="Compte">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+      </button>
     </header>
 
     <div class="screens">
@@ -86,6 +88,13 @@
       <div class="sheet-grip"></div>
       <button class="sheet-close" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="sheet-scroll" id="detail-content"></div>
+    </div>
+
+    <!-- ACCOUNT SHEET -->
+    <div class="sheet" id="account-sheet">
+      <div class="sheet-grip"></div>
+      <button class="sheet-close" data-close><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="sheet-scroll" id="account-content"></div>
     </div>
 
     <!-- FILTER SHEET -->

@@ -3,8 +3,23 @@ import { registerSW } from 'virtual:pwa-register';
 import type { EventItem, EventsFile, Category, Zone } from './types';
 import { CATEGORY_LABELS } from './types';
 import { setupMap, type MapController } from './map';
+import {
+  isAuthConfigured,
+  onAuthStateChange,
+  signIn,
+  signUp,
+  signOut,
+  loadPreferences,
+  savePreferences,
+  type Preferences,
+} from './auth';
+import type { Session } from '@supabase/supabase-js';
 
 registerSW({ immediate: true });
+
+const EMPTY_PREFS: Preferences = { favoriteCategories: [], homeZone: null, favoriteEventIds: [] };
+let currentSession: Session | null = null;
+let currentPrefs: Preferences = EMPTY_PREFS;
 
 const CATS: { v: Category | 'all'; l: string }[] = [
   { v: 'all', l: 'Tout' },
@@ -58,7 +73,12 @@ function loadFavorites(): Set<string> {
 }
 
 function saveFavorites() {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...state.favorites]));
+  if (currentSession) {
+    currentPrefs = { ...currentPrefs, favoriteEventIds: [...state.favorites] };
+    void savePreferences(currentSession.user.id, currentPrefs);
+  } else {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...state.favorites]));
+  }
 }
 
 function starsSvg(): string {
@@ -172,10 +192,20 @@ function renderAll() {
     ? news.map(heroCardHTML).join('')
     : '<div class="empty-state">Rien de neuf depuis la dernière mise à jour.</div>';
 
-  const upcoming = [...state.events]
-    .filter((e) => isThisWeek(e.dateStart) || !e.dateStart)
-    .sort((a, b) => a.dateStart.localeCompare(b.dateStart))
-    .slice(0, 8);
+  let upcoming = [...state.events].filter((e) => isThisWeek(e.dateStart) || !e.dateStart);
+  const hasPrefs = currentSession && (currentPrefs.favoriteCategories.length > 0 || currentPrefs.homeZone);
+  if (hasPrefs) {
+    const preferred = upcoming.filter(
+      (e) =>
+        (currentPrefs.favoriteCategories.length === 0 || currentPrefs.favoriteCategories.includes(e.category)) &&
+        (!currentPrefs.homeZone || e.zone === currentPrefs.homeZone)
+    );
+    if (preferred.length > 0) upcoming = preferred;
+  }
+  upcoming = upcoming.sort((a, b) => a.dateStart.localeCompare(b.dateStart)).slice(0, 8);
+  $('screen-accueil').querySelector('.screen-sub')!.textContent = hasPrefs
+    ? 'Sélection selon tes préférences.'
+    : "Voici ce qu'il ne faut pas rater cette semaine.";
   $('accueil-list').innerHTML = upcoming.length
     ? upcoming.map(cardHTML).join('')
     : '<div class="empty-state">Aucun événement chargé pour l’instant.</div>';
@@ -239,6 +269,68 @@ function closeSheets() {
   document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('open'));
 }
 
+function updateAccountButton() {
+  $('open-account').classList.toggle('logged-in', Boolean(currentSession));
+}
+
+function renderAccountSheet(error?: string) {
+  const el = $('account-content');
+
+  if (!isAuthConfigured) {
+    el.innerHTML = `
+      <h3 class="sheet-heading">Compte</h3>
+      <p class="form-note">La connexion n'est pas encore activée sur cette installation. En attendant, tes favoris restent enregistrés sur cet appareil.</p>
+    `;
+    return;
+  }
+
+  if (!currentSession) {
+    el.innerHTML = `
+      <h3 class="sheet-heading">Compte</h3>
+      <div class="field"><label>Email</label><input type="email" id="account-email-input" autocomplete="email" /></div>
+      <div class="field"><label>Mot de passe</label><input type="password" id="account-password-input" autocomplete="current-password" /></div>
+      <div class="form-actions">
+        <button class="btn" id="account-signup">Créer un compte</button>
+        <button class="btn primary" id="account-signin">Se connecter</button>
+      </div>
+      ${error ? `<div class="form-error">${escapeHTML(error)}</div>` : ''}
+      <p class="form-note">Une fois connecté, tes catégories préférées et ta zone "chez moi" s'appliquent automatiquement à l'ouverture, sur tous tes appareils.</p>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <h3 class="sheet-heading">Compte</h3>
+    <div class="account-email">${escapeHTML(currentSession.user.email ?? '')}</div>
+    <div class="filter-group">
+      <h4>Tes catégories préférées</h4>
+      <div class="filter-options" id="pref-categories">
+        ${CATS.filter((c) => c.v !== 'all')
+          .map(
+            (c) =>
+              `<div class="filter-opt ${currentPrefs.favoriteCategories.includes(c.v as Category) ? 'sel' : ''}" data-pref-cat="${c.v}">${c.l}</div>`
+          )
+          .join('')}
+      </div>
+    </div>
+    <div class="filter-group">
+      <h4>Zone "chez moi"</h4>
+      <div class="filter-options" id="pref-zone">
+        <div class="filter-opt ${currentPrefs.homeZone === 'paris' ? 'sel' : ''}" data-pref-zone="paris">Paris</div>
+        <div class="filter-opt ${currentPrefs.homeZone === 'petite_couronne' ? 'sel' : ''}" data-pref-zone="petite_couronne">Petite couronne</div>
+        <div class="filter-opt ${currentPrefs.homeZone === 'grande_couronne' ? 'sel' : ''}" data-pref-zone="grande_couronne">Grande couronne</div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" id="account-save-prefs">Enregistrer</button>
+    </div>
+    <div class="form-actions">
+      <button class="btn danger" id="account-signout">Se déconnecter</button>
+    </div>
+    ${error ? `<div class="form-error">${escapeHTML(error)}</div>` : ''}
+  `;
+}
+
 function setGreeting() {
   const hour = new Date().getHours();
   const el = document.getElementById('greeting');
@@ -270,6 +362,42 @@ async function loadEvents() {
   }
   renderAll();
   mapController?.setEvents(state.events);
+}
+
+async function handleSignIn() {
+  const email = ($('account-email-input') as HTMLInputElement).value.trim();
+  const password = ($('account-password-input') as HTMLInputElement).value;
+  const error = await signIn(email, password);
+  if (error) renderAccountSheet(error);
+  else closeSheets();
+}
+
+async function handleSignUp() {
+  const email = ($('account-email-input') as HTMLInputElement).value.trim();
+  const password = ($('account-password-input') as HTMLInputElement).value;
+  const error = await signUp(email, password);
+  if (error) {
+    renderAccountSheet(error);
+    return;
+  }
+  renderAccountSheet();
+  $('account-content').insertAdjacentHTML(
+    'afterbegin',
+    '<p class="form-note">Compte créé. Si la confirmation par email est activée sur le projet, vérifie ta boîte mail avant de te connecter.</p>'
+  );
+}
+
+async function handleSavePrefs() {
+  if (!currentSession) return;
+  const favoriteCategories = [...document.querySelectorAll<HTMLElement>('#pref-categories .sel')].map(
+    (el) => el.dataset.prefCat as Category
+  );
+  const homeZoneEl = document.querySelector<HTMLElement>('#pref-zone .sel');
+  const homeZone = (homeZoneEl?.dataset.prefZone as Zone | undefined) ?? null;
+  currentPrefs = { ...currentPrefs, favoriteCategories, homeZone };
+  await savePreferences(currentSession.user.id, currentPrefs);
+  renderAll();
+  closeSheets();
 }
 
 document.addEventListener('click', (ev) => {
@@ -321,12 +449,46 @@ document.addEventListener('click', (ev) => {
     openSheet('filter-sheet');
     return;
   }
+  if (target.closest('#open-account')) {
+    renderAccountSheet();
+    openSheet('account-sheet');
+    return;
+  }
   if (target.closest('[data-close]')) {
     closeSheets();
     return;
   }
   if (target === $('backdrop')) {
     closeSheets();
+    return;
+  }
+
+  const prefCat = target.closest<HTMLElement>('[data-pref-cat]');
+  if (prefCat) {
+    prefCat.classList.toggle('sel');
+    return;
+  }
+  const prefZone = target.closest<HTMLElement>('[data-pref-zone]');
+  if (prefZone) {
+    prefZone.parentElement!.querySelectorAll('[data-pref-zone]').forEach((o) => o.classList.remove('sel'));
+    prefZone.classList.add('sel');
+    return;
+  }
+  if (target.closest('#account-signin')) {
+    void handleSignIn();
+    return;
+  }
+  if (target.closest('#account-signup')) {
+    void handleSignUp();
+    return;
+  }
+  if (target.closest('#account-signout')) {
+    void signOut();
+    closeSheets();
+    return;
+  }
+  if (target.closest('#account-save-prefs')) {
+    void handleSavePrefs();
     return;
   }
 
@@ -357,6 +519,19 @@ document.getElementById('search-input')?.addEventListener('input', (ev) => {
   state.query = (ev.target as HTMLInputElement).value;
   listPageSize.delete('explorer-list');
   renderExplorer();
+});
+
+onAuthStateChange(async (session) => {
+  currentSession = session;
+  updateAccountButton();
+  if (session) {
+    currentPrefs = await loadPreferences(session.user.id);
+    state.favorites = new Set(currentPrefs.favoriteEventIds);
+  } else {
+    currentPrefs = EMPTY_PREFS;
+    state.favorites = loadFavorites();
+  }
+  renderAll();
 });
 
 setGreeting();

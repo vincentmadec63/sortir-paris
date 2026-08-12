@@ -78,6 +78,33 @@ body{
 }
 .topbar-title{font-weight:600;font-size:1.05rem;letter-spacing:-0.01em;}
 .topbar-zone{font-family:var(--mono);font-size:0.66rem;color:var(--ink-faint);}
+.account-btn{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--surface-2);border:1px solid var(--line-strong);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.account-btn svg{width:17px;height:17px;stroke:var(--ink-soft);fill:none;stroke-width:2;}
+.account-btn.logged-in{border-color:var(--amber);}
+.account-btn.logged-in svg{stroke:var(--amber);}
+
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:0.76rem;color:var(--ink-soft);margin-bottom:5px;}
+.field input{
+  width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line-strong);
+  background:var(--surface-2);color:var(--ink);font-family:var(--body);font-size:0.88rem;
+}
+.field input:focus{outline:2px solid var(--amber);outline-offset:1px;}
+.form-actions{display:flex;gap:8px;margin-top:16px;}
+.btn{
+  flex:1;padding:12px;border-radius:12px;border:1px solid var(--line-strong);
+  background:var(--surface-2);color:var(--ink);font-family:var(--body);font-weight:600;
+  font-size:0.85rem;cursor:pointer;
+}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#1A1420;}
+.btn.danger{color:var(--brick);}
+.form-error{color:var(--brick);font-size:0.78rem;margin-top:10px;}
+.form-note{color:var(--ink-faint);font-size:0.72rem;margin-top:14px;line-height:1.5;}
+.account-email{font-family:var(--mono);font-size:0.85rem;color:var(--ink);margin-bottom:16px;word-break:break-all;}
 
 .screens{flex:1;position:relative;overflow:hidden;}
 .screen{

@@ -24,6 +24,7 @@
     "vite-plugin-pwa": "^0.20.5"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3"
   }
