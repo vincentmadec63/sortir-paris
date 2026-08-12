@@ -84,6 +84,7 @@ function toEventItem(record) {
     isNew: false, // recalculé plus bas par diff avec le run précédent
     verified: category === 'ephemere',
     verifiedVia: category === 'ephemere' ? 'OpenAgenda (données publiques)' : undefined,
+    highlighted: false,
   };
 }
 

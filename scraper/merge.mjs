@@ -34,6 +34,7 @@ function richness(event) {
   if (event.rating) score += 4;
   if (event.price !== null && event.price !== undefined) score += 2;
   if (event.description) score += 1;
+  if (event.highlighted) score += 1;
   return score;
 }
 
@@ -42,7 +43,20 @@ function dedupeEvents(events) {
   for (const event of events) {
     const key = dedupeKey(event);
     const existing = byKey.get(key);
-    if (!existing || richness(event) > richness(existing)) byKey.set(key, event);
+    if (!existing) {
+      byKey.set(key, event);
+      continue;
+    }
+    // Le "coup de cœur" est un signal éditorial propre à sa source — s'il
+    // n'apparaît que sur le doublon écarté, on le reporte quand même sur la
+    // fiche gardée plutôt que de le perdre silencieusement.
+    const winner = richness(event) > richness(existing) ? event : existing;
+    const loser = winner === event ? existing : event;
+    if (loser.highlighted && !winner.highlighted) {
+      winner.highlighted = true;
+      winner.highlightedVia = loser.highlightedVia;
+    }
+    byKey.set(key, winner);
   }
   return [...byKey.values()];
 }

@@ -25,6 +25,32 @@ const MAX_PAGES_PER_GENRE = 4; // ~120 fiches/genre max
 const PAGE_DELAY_MS = 300;
 const DETAIL_CONCURRENCY = 5;
 
+// Pas de vraie donnée "prix/récompense" disponible chez aucune de nos
+// sources. Ces deux pages éditoriales de TheaterOnline sont le proxy le
+// plus proche d'une reconnaissance réelle — étiqueté honnêtement comme tel
+// (pas présenté comme un prix officiel type Molières).
+const HIGHLIGHT_PAGES = [
+  { path: 'Coups-de-coeur', label: 'Coup de cœur TheaterOnline' },
+  { path: 'Succes', label: 'Succès du moment TheaterOnline' },
+];
+
+async function collectHighlightUrls() {
+  const highlights = new Map();
+  for (const { path: p, label } of HIGHLIGHT_PAGES) {
+    const html = await fetchText(`${BASE}/${p}/`);
+    const $ = load(html);
+    const links = new Set();
+    $('a[href^="/Spectacle/"]').each((_, el) => links.add($(el).attr('href')));
+    for (const href of links) {
+      const url = `${BASE}${href}`;
+      if (!highlights.has(url)) highlights.set(url, label);
+    }
+    console.log(`  ${p}: ${links.size} fiches`);
+    await sleep(PAGE_DELAY_MS);
+  }
+  return highlights;
+}
+
 async function listGenrePage(slug, page) {
   const url = page === 1 ? `${BASE}/Spectacles/Liste/${slug}` : `${BASE}/Spectacles/Liste/${slug}?page=${page}`;
   const html = await fetchText(url);
@@ -60,7 +86,7 @@ function extractId(url) {
   return seg || url;
 }
 
-async function fetchEventDetail(url, category) {
+async function fetchEventDetail(url, category, highlightVia) {
   const html = await fetchText(url);
   const $ = load(html);
   const ev = findScopes($, $.root(), 'Event').first();
@@ -127,6 +153,8 @@ async function fetchEventDetail(url, category) {
     isNew: false,
     verified: false,
     verifiedVia: undefined,
+    highlighted: Boolean(highlightVia),
+    highlightedVia: highlightVia,
   };
 }
 
@@ -136,7 +164,12 @@ async function main() {
   const urls = [...urlToCategory.keys()];
   console.log(`${urls.length} fiches uniques à détailler…`);
 
-  const results = await mapLimit(urls, DETAIL_CONCURRENCY, (url) => fetchEventDetail(url, urlToCategory.get(url)));
+  console.log('Listing des pages éditoriales (coups de cœur / succès)…');
+  const highlights = await collectHighlightUrls();
+
+  const results = await mapLimit(urls, DETAIL_CONCURRENCY, (url) =>
+    fetchEventDetail(url, urlToCategory.get(url), highlights.get(url))
+  );
   const events = results.filter(Boolean);
 
   await mkdir(path.dirname(OUT_FILE), { recursive: true });
@@ -148,6 +181,7 @@ async function main() {
   }, {});
   console.log(`TheaterOnline: ${events.length} événements retenus sur ${urls.length} fiches visitées.`);
   console.log('Par catégorie:', counts);
+  console.log('Dont mis en avant (coup de cœur/succès):', events.filter((e) => e.highlighted).length);
   console.log(`Écrit dans ${OUT_FILE}`);
 }
 

@@ -25,6 +25,8 @@ export interface EventItem {
   isNew: boolean;
   verified: boolean;
   verifiedVia?: string;
+  highlighted: boolean;
+  highlightedVia?: string;
 }
 
 export interface EventsFile {

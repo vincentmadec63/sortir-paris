@@ -39,6 +39,13 @@ Règles communes appliquées par tous les connecteurs : **pas de photo → pas d
 fiche**, et la catégorie **stand-up est filtrée à Paris intra-muros**
 uniquement (pas de couronne).
 
+**Badge "★ Coup de cœur"** : aucune source n'a de vraie donnée "prix/
+récompense" (pas de Molières etc.). Ce badge reflète les pages éditoriales
+publiques de TheaterOnline ("Coups de cœur" / "Succès du moment") — une
+reconnaissance réelle mais pas un prix officiel, étiqueté comme tel plutôt
+que présenté comme une récompense. Filtre disponible dans la feuille de
+filtres d'Explorer.
+
 Les doublons entre sources (même spectacle listé par deux billetteries) sont
 fusionnés par titre normalisé dans `scraper/merge.mjs` (garde la fiche la
 plus riche en infos). Chaque événement est géolocalisé (`lat`/`lng`) —

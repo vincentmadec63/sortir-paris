@@ -50,6 +50,7 @@ interface Filters {
   rating: string | null;
   when: string | null;
   sort: string | null;
+  highlight: string | null;
 }
 
 const state: {
@@ -61,7 +62,7 @@ const state: {
 } = {
   events: [],
   cat: 'all',
-  filters: { price: null, zone: null, rating: null, when: null, sort: null },
+  filters: { price: null, zone: null, rating: null, when: null, sort: null, highlight: null },
   favorites: loadFavorites(),
   query: '',
 };
@@ -151,7 +152,7 @@ function cardHTML(e: EventItem): string {
     <div class="card-body">
       <div class="card-top">
         <div>
-          <div class="card-cat">${CATEGORY_LABELS[e.category]}</div>
+          <div class="card-cat">${CATEGORY_LABELS[e.category]}${e.highlighted ? ' · <span class="highlight-badge">★ Coup de cœur</span>' : ''}</div>
           <div class="card-title">${escapeHTML(e.title)}</div>
         </div>
       </div>
@@ -271,6 +272,7 @@ function matchesFilters(e: EventItem): boolean {
   if (f.rating && (!e.rating || e.rating < parseFloat(f.rating))) return false;
   if (f.when && !matchesWhen(e, f.when)) return false;
   if (f.sort === 'topRated' && (!e.reviewsCount || e.reviewsCount < 10)) return false;
+  if (f.highlight === 'only' && !e.highlighted) return false;
   return true;
 }
 
@@ -345,6 +347,7 @@ function openDetail(id: string) {
   $('detail-content').innerHTML = `
     <img class="detail-hero" src="${e.imageUrl}" alt="" loading="lazy" decoding="async" />
     <div class="detail-cat">${CATEGORY_LABELS[e.category]}${e.verified ? ' · Vérifié via ' + escapeHTML(e.verifiedVia ?? e.sourceName) : ''}</div>
+    ${e.highlighted ? `<div class="highlight-badge" style="margin:6px 0 0;">★ ${escapeHTML(e.highlightedVia ?? 'Coup de cœur')}</div>` : ''}
     <div class="detail-title">${escapeHTML(e.title)}</div>
     <div class="detail-meta-row">
       <span>${escapeHTML(e.venue)}</span>

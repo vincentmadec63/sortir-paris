@@ -114,6 +114,7 @@ async function fetchEventDetail(url, category) {
     isNew: false,
     verified: false,
     verifiedVia: undefined,
+    highlighted: false,
   };
 }
 

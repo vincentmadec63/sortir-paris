@@ -200,6 +200,7 @@ body{
 .empty-state{text-align:center;padding:40px 20px;color:var(--ink-faint);font-size:0.85rem;}
 
 .verified{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:0.62rem;color:var(--amber-dim);margin-top:4px;}
+.highlight-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:0.62rem;letter-spacing:0.02em;color:var(--amber);font-weight:700;text-transform:none;}
 
 .cat-legend{display:flex;gap:12px;flex-wrap:wrap;padding:10px 0 8px;font-size:0.66rem;color:var(--ink-soft);}
 .cat-legend span{display:flex;align-items:center;gap:5px;}
